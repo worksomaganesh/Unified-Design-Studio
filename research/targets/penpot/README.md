@@ -1,68 +1,65 @@
 # Penpot — research dossier
 
-**Canonical source:** https://github.com/penpot/penpot  
-**Research status:** Official documentation, architecture guide and source metadata reviewed 2026-11-08.  
-**Direct REA validation:** Pending.  
-**License:** MPL-2.0 (verified from repository package metadata and LICENSE).
+**Research status:** Official product, architecture and license review consolidated · **Direct REA validation:** Pending  
+**Research date:** 2026-11-08 · **Upstream:** [penpot/penpot](https://github.com/penpot/penpot)
 
 ## Product role
 
-Penpot is an open-source professional design platform with vector editing, responsive layout, components, design tokens, libraries, inspection and interactive prototyping. It is the strongest open-source reference for standards-based design.
+Penpot is the open-source professional design-editor reference. It is especially relevant for web standards, vector editing, responsive layout and the relationship between design objects and code.
 
-## Source-inspected/documented architecture
+## Capabilities worth studying
 
-- Frontend: ClojureScript with React.
-- Backend: Clojure on the JVM.
-- Persistence: PostgreSQL.
-- Collaboration/presence: persistent WebSocket connections associated with a file, with Redis pub/sub in the documented backend architecture.
-- Design model: SVG-oriented vector objects and a structured document format.
-- Native `.penpot` export: ZIP package containing JSON metadata/pages/shapes/components/tokens and binary assets. The format is explicitly versioned and includes feature flags and migrations.
+- Vector and interface design, frames, layers and reusable components.
+- Responsive layout with CSS Grid and Flex Layout.
+- Interactive prototyping and design-system libraries/tokens.
+- Open design file format and standards-based output such as CSS, HTML, SVG and JSON.
+- Self-hosting and extensibility for developers and agents.
 
-## Design capabilities
+## Upstream architecture evidence
 
-- SVG-based vector editing and boolean operations.
-- Flex Layout and CSS Grid.
-- Components, variants, libraries and design tokens.
-- Responsive behavior and constraints.
-- Prototype flows, overlays, navigation and transitions.
-- Code inspection and developer workflows.
+Penpot's technical guide describes a SPA frontend written in ClojureScript using React, communicating with a Clojure backend; PostgreSQL persists data. The frontend uses an RPC-style HTTP interface and persistent WebSockets for file collaboration/presence. This architecture is powerful but much heavier than our initial single-user MVP needs.
+
+The current upstream repository declares **MPL-2.0**. This is not the same as MIT or Apache-2.0: covered modified files distributed as source remain under MPL terms, and notices/source obligations must be evaluated before code reuse.
 
 ## Architectural lessons for UDS
 
-1. Keep the design format open, versioned, inspectable and migration-aware.
-2. Represent vector primitives and paths explicitly even if the first release prioritizes product UI.
-3. Treat layout semantics as first-class document data rather than baking everything into absolute coordinates.
-4. Plan component libraries, variants, token sets and prototype flows into the model.
-5. Build a `.penpot` importer/exporter as a later adapter, not as our canonical internal format.
+1. Use CSS Grid and Flex semantics as actual layout primitives in our document model.
+2. Keep vector geometry and web-layout nodes interoperable but distinct.
+3. Define an explicit portable file format; do not make the runtime DOM the only source of truth.
+4. Defer multiplayer infrastructure while still designing stable node IDs and revision semantics.
+5. Learn from Penpot's open file format and exportability without adopting its entire Clojure/PostgreSQL stack.
 
-## License and reuse boundary
+## UDS implementation mapping
 
-MPL-2.0 is a file-level copyleft license. Reuse of Penpot code is possible only with a careful review of covered files, notices, modifications and distribution obligations. We will initially learn from its architecture and open file format; no code will be copied into UDS until the exact files and obligations have been reviewed.
+| Capability | UDS destination | Priority |
+|---|---|---|
+| Flex/Grid and constraints | Layout engine | P0 |
+| Components/libraries/tokens | Design-system engine | P0 |
+| SVG shapes and paths | Vector subsystem | P1/P2 |
+| Prototype links/actions | Prototype engine | P1 |
+| Penpot import/export | Interoperability adapter | P1 |
+| Full vector boolean operations | Advanced editor | P2 |
 
-## Evidence status
+## Direct REA validation plan
 
-| Finding | Classification |
-|---|---|
-| ClojureScript/React frontend and Clojure/JVM backend | Documented |
-| PostgreSQL and Redis/WebSocket collaboration topology | Documented |
-| SVG and layout features | Documented |
-| ZIP + JSON + assets `.penpot` format | Documented |
-| License MPL-2.0 | Source-inspected |
-| Direct runtime behavior in UDS research browser | Pending |
-
-## UDS capability mapping
-
-- Vector node types and SVG paths
-- CSS Grid/Flex layout semantics
-- Components, variants and design tokens
-- Prototype graph
-- Open-format import/export adapter
+On an authorized design file, create a responsive frame; test flex/grid; create a reusable component; bind tokens; connect prototype screens; inspect SVG/vector editing; export CSS/SVG/HTML; and compare exported semantics with the editor's document representation. Separate documented features from account- or version-specific availability.
 
 ## Sources
 
-- https://penpot.app/features
-- https://help.penpot.app/technical-guide/developer/architecture/
-- https://help.penpot.app/technical-guide/developer/architecture/frontend/
-- https://help.penpot.app/user-guide/export-import/penpot-file-format/
-- https://github.com/penpot/penpot
-- https://github.com/penpot/penpot/blob/develop/LICENSE
+- [Penpot official website](https://penpot.app/)
+- [Penpot technical architecture](https://help.penpot.app/technical-guide/developer/architecture/)
+- [Penpot frontend architecture](https://github.com/penpot/penpot-docs/blob/main/technical-guide/developer/architecture/frontend.md)
+- [Penpot source repository](https://github.com/penpot/penpot)
+- [Penpot license](https://github.com/penpot/penpot/blob/develop/LICENSE)
+
+## Evidence log
+
+| Date | Workflow | Evidence | Status |
+|---|---|---|---|
+| 2026-11-08 | Product, architecture and license review | Links above | Source review complete; direct REA observation pending |
+
+## Open questions
+
+- What parts of the file format should map directly to our canonical document?
+- Which SVG operations and layout constraints have reliable import/export paths?
+- Which MPL-covered files or dependencies would be affected by reuse?
