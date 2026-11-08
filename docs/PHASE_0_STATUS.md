@@ -5,9 +5,11 @@
 
 ## Accounting note
 
-The original 16-item checklist counted repository setup, research structure, REA setup, MCP connection, browser profile, nine product investigations, feature matrix and final requirements. The user's earlier message reported 11/16. The previous committed tracker reported 12/16 by counting the feature matrix separately. To avoid silently rewriting history, this update uses **12/16 as the previous repository baseline**, then records the newly completed documentation work separately. Direct REA validation is a distinct evidence gate and has not been performed.
+The original 16-item checklist counts repository setup, research structure, REA setup, MCP connection, browser profile, nine product investigations, feature matrix and final requirements. The user previously reported 11/16; the previous committed tracker reported 12/16. After this documentation pass, **13/16 top-level tasks are complete**: the nine desk-research dossiers and feature matrix are complete, and final requirements/documentation are now consolidated. The three remaining tasks are local REA installation, Antigravity MCP connection and dedicated browser-profile setup. Direct REA validation across the products remains an additional evidence gate, not a completed task.
 
 ## Top-level task status
+
+**Current accounting: 13/16 complete (81.25%); 3/16 blocked on local Windows setup.**
 
 | # | Task | Status | Evidence / next action |
 |---:|---|---|---|
