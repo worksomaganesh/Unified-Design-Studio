@@ -1,7 +1,7 @@
 # REA setup on Windows 11 + Antigravity
 
 **Purpose:** Enable controlled, passive inspection of the nine research targets using REA from Antigravity on the HP Victus.  
-**Important:** These steps are prepared for local execution. REA has not been installed or connected in this chat because the laptop's shell and Antigravity configuration are not directly accessible here.
+**Important:** These steps are prepared for local execution. REA has not been installed or connected here because the laptop's shell and Antigravity configuration are not directly accessible.
 
 ## Safety rules first
 
@@ -74,17 +74,42 @@ Set these variables in the environment inherited by Antigravity/REA, or in the R
 
 Close and relaunch Antigravity after changing user-level environment variables. For a different target origin, deliberately update the allowlist and restart the REA process as required. Keep the list as narrow as practical.
 
-## Step 5 — Launch a dedicated Chrome/Edge profile
+## Step 5 — Launch a dedicated Chrome profile
 
-From the project directory, use the helper script:
+The repository does not currently include a browser-launch helper script. Use this PowerShell snippet directly, replacing the origin with the exact product origin you verified:
 
 ```powershell
-.\scripts\start-rea-browser.ps1 -Origin "https://EXACT-ORIGIN-FROM-THE-ADDRESS-BAR"
+$Origin = "https://EXACT-ORIGIN-FROM-THE-ADDRESS-BAR"
+$ProfilePath = Join-Path $env:LOCALAPPDATA "UnifiedDesignStudio\REA-ChromeProfile"
+
+$ChromeCandidates = @(
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+)
+
+$ChromePath = $ChromeCandidates |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+
+if (-not $ChromePath) {
+    throw "Google Chrome was not found. Install Chrome or adapt the launch command for Edge."
+}
+
+New-Item -ItemType Directory -Force -Path $ProfilePath | Out-Null
+
+Start-Process -FilePath $ChromePath -ArgumentList @(
+    "--user-data-dir=$ProfilePath",
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-debugging-port=9222",
+    "--no-first-run",
+    $Origin
+)
 ```
 
-The helper creates a separate browser profile under `%LOCALAPPDATA%\UnifiedDesignStudio\REA-ChromeProfile`, uses CDP port 9222 on loopback, and opens the target origin. It does not reuse the user's normal browser profile.
+This creates a separate profile under `%LOCALAPPDATA%\UnifiedDesignStudio\REA-ChromeProfile`, uses CDP port 9222 on loopback, and opens the target origin. It does not reuse the user's normal browser profile.
 
-If Chrome/Edge is already using port 9222, close only the dedicated research browser and restart it. Do not expose the port publicly. Sign in manually only if the product research requires it and you are authorized to access that account.
+If Chrome is already using port 9222, close only the dedicated research browser and restart it. Do not expose the port publicly. Sign in manually only if the product research requires it and you are authorized to access that account.
 
 ## Step 6 — Verify the connection
 
