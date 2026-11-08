@@ -1,66 +1,80 @@
 # Development roadmap
 
-**Status:** Phase 0 is in progress. Phases after research are proposed sequencing, not committed delivery dates.
+**Current phase:** Phase 0 — research and architecture baseline consolidated; local REA validation pending.  
+**No delivery dates are committed.**
 
-## Phase 0 — Research and product definition
+## Phase 0 — Research and architecture validation
 
-**Current status: 12 / 16 top-level tasks complete (75%).**
+Completed in repository:
+- Public-source research for all nine target products.
+- Nine expanded product dossiers, with sources, architecture lessons, implementation mapping and direct-observation test plans.
+- Updated feature comparison and priorities.
+- Reconciled architecture decisions and technology recommendation.
+- Updated product requirements, architecture, design model and security/API boundaries.
 
-Completed:
-- GitHub repository created and project scaffold organized.
-- Public-source desk research compared nine target products.
-- Consolidated feature matrix created.
-- Product requirements, architecture, design-document model, security boundaries and provisional decisions drafted.
-
-Remaining:
-- Install and verify REA locally on the Windows laptop.
+Remaining local-only gate:
+- Verify REA installer/package and resolve endpoint-protection detection safely.
+- Install and verify REA on the HP Victus if the artifact is trusted.
 - Connect REA to Antigravity through MCP.
-- Configure a dedicated Chromium profile with loopback-only CDP and exact-origin allowlisting.
-- Perform reproducible browser observations for all nine products; save screenshots, evidence IDs, limitations and per-target notes.
-- Reconcile the findings and freeze product/technical requirements.
+- Configure a dedicated browser profile and loopback-only CDP.
+- Run reproducible observations for accessible products; record plan/access limitations for unavailable products.
+- Update dossiers with screenshots, evidence IDs and observed behavior.
 
-**Exit gate:** Each target has a reproducible observation and evidence record (or a documented access limitation); claims distinguish public documentation, direct observation, inference and unknowns; requirements and architecture are reviewed and approved.
+**Exit gate:** Public claims, source evidence, direct observation, inference and unknowns are distinguished; local REA setup is verified or explicitly waived; product/technical requirements are approved. Phase 0 documentation is consolidated, but the full REA evidence gate is still open.
 
-## Phase 1 — Core model and renderer spike
+## Phase 1 — Design model and renderer spike
 
-Proposed scope:
-- Finalize the versioned design-document schema and migrations.
-- Implement document validation, node identity and revision semantics.
-- Render a supported DOM/CSS node subset inside an isolated preview frame.
-- Prove selection overlays, pan/zoom, drag, resize and inline text editing.
-- Establish unit and visual-regression tests.
+Build a small technical proof, not the full application:
+- TypeScript package for document schema, Zod validation and migrations.
+- Node types: document/page/frame/container/text/image/shape/component instance.
+- Layout semantics: fixed, flex and grid.
+- Stable IDs and document revision.
+- Deterministic DOM/CSS renderer.
+- SVG selection/transform overlays.
+- Pan/zoom, selection, drag, resize and inline text editing.
+- Visual regression tests at desktop and mobile widths.
 
-**Exit gate:** A saved document can be rendered deterministically and edited without losing stable node identity.
+**Exit gate:** A saved schema-valid document renders deterministically and can be edited without losing node identity.
 
 ## Phase 2 — Studio editing vertical slice
 
-Proposed scope:
-- Build the React studio shell, canvas viewport, layer tree and property inspector.
-- Add project creation, local persistence, autosave, undo/redo and revision restore.
-- Support core text, image, shape, frame and layout editing.
-- Add desktop/tablet/mobile preview presets.
+- React/Vite application shell.
+- Canvas, layer tree, property inspector and asset panel.
+- Project create/open/rename/duplicate.
+- SQLite persistence and project-scoped asset storage.
+- Autosave, undo/redo and revision restore.
+- Desktop/tablet/mobile viewport presets.
 
-**Exit gate:** A user can create, edit, save, close and reopen a multi-screen project.
+**Exit gate:** Create, edit, save, close and reopen a multi-screen project.
 
-## Phase 3 — AI generation and patching
+## Phase 3 — AI design generation and patching
 
-Proposed scope:
-- Add provider adapters behind a provider-neutral interface.
-- Generate a screen plan and multiple related screens from a brief.
-- Validate and apply scoped, revision-aware AI patches.
-- Display generation status, errors and available usage/cost metadata.
+- Provider-neutral model adapters.
+- PRD/brief parser and UX-flow/screen-plan schema.
+- Generate at least three related screens and alternative directions.
+- Structured, revision-aware AI patches.
+- Selection-scoped edit and change summary.
+- Validation and visual review.
 
-**Exit gate:** AI can create a coherent editable screen set and safely update a selected region without rewriting unrelated content.
+**Exit gate:** AI can generate a coherent editable screen set and safely modify selected regions.
 
 ## Phase 4 — Prototyping and code handoff
 
-Proposed scope:
-- Add screen connections, basic interactions, overlays and prototype preview.
-- Export React/CSS, tokens and assets from the canonical document.
-- Run exported output in a restricted preview and report unsupported constructs.
+- Prototype graph, triggers, actions and state.
+- Clickable preview and responsive rendering.
+- React/CSS/token/asset export.
+- Restricted code preview and unsupported-feature reporting.
+- Local project/repository handoff.
 
-**Exit gate:** A user can move from brief to editable screens, clickable prototype and usable frontend export.
+**Exit gate:** Complete idea-to-editable-design-to-prototype-to-code workflow.
 
-## Later — Interoperability and collaboration
+## Later phases
 
-Defer Figma/Penpot importers, advanced vector editing, multiplayer/CRDT collaboration, hosted accounts, billing and organization administration until the single-user end-to-end workflow is reliable and user evidence justifies the added complexity.
+- Figma/Penpot import/export.
+- Advanced vector editing and richer design tooling.
+- MCP agent operations over the shared command service.
+- GitHub branch/PR integration.
+- Real-time collaboration and hosted sync.
+- Team permissions and integrations marketplace.
+
+These are deliberately deferred until the MVP proves its core value.
