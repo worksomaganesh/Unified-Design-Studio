@@ -1,75 +1,65 @@
 # Unified Design Studio
 
-An AI-native, local-first design workspace intended to connect product discovery, multi-screen UI generation, direct visual editing, design systems, interactive prototyping and frontend code handoff.
+An AI-native, local-first product design workspace combining UX planning, multimodal design generation, direct visual editing, reusable design systems, interactive prototypes and frontend handoff.
 
-> **Project stage:** Phase 0 — research and product definition. The repository currently contains research and planning documents; application implementation has not started.
+> **Current stage:** Phase 0 — public-source research and architecture documentation consolidated. Local REA setup and direct browser observations remain pending. No application implementation has started.
 
-## Current status
+## Status
 
-- **Phase 0: 12 / 16 top-level tasks complete (75%).**
-- Public-source desk research covers nine products: Claude Design, OpenDesign, Figma, Google Stitch, Penpot, Doop, Paper, v0 and UX Pilot.
-- The consolidated comparison is in [the feature matrix](research/feature-matrix/FEATURE_MATRIX.md).
-- **Direct REA browser validation: 0 / 9 targets completed.**
-- Product and technical specifications remain drafts until the REA evidence pass is complete.
+- Nine product dossiers expanded: Claude Design, OpenDesign, Figma, Google Stitch, Penpot, Doop, Paper, v0 and UX Pilot.
+- Comparative feature matrix and implementation priorities updated.
+- Architecture and technology recommendations reviewed.
+- Fourteen architecture decisions recorded.
+- **Direct REA validations: 0/9.** Local setup must be completed before claiming browser evidence.
+- See [Phase 0 status](docs/PHASE_0_STATUS.md).
 
-See [Phase 0 status](docs/PHASE_0_STATUS.md), [development roadmap](docs/DEVELOPMENT_ROADMAP.md) and [provisional decisions](docs/decisions/DECISIONS.md).
+## Product workflow
 
-## Repository map
+**Brief / PRD / reference → UX flow and screen plan → design directions → editable screens → responsive preview → clickable prototype → React/CSS handoff.**
+
+This is not nine embedded clones. UDS will implement one coherent workflow with a canonical, versioned design document shared by the editor, AI, renderer, prototype engine and exporters.
+
+## Research
+
+| Target | Research dossier |
+|---|---|
+| Claude Design | [Dossier](research/targets/claude-design/README.md) |
+| OpenDesign | [Dossier](research/targets/opendesign/README.md) |
+| Figma | [Dossier](research/targets/figma/README.md) |
+| Google Stitch | [Dossier](research/targets/google-stitch/README.md) |
+| Penpot | [Dossier](research/targets/penpot/README.md) |
+| Doop | [Dossier](research/targets/doop/README.md) |
+| Paper | [Dossier](research/targets/paper/README.md) |
+| v0 | [Dossier](research/targets/v0/README.md) |
+| UX Pilot | [Dossier](research/targets/uxpilot/README.md) |
+
+See the [comparative feature matrix](research/feature-matrix/FEATURE_MATRIX.md).
+
+## Core technical direction
+
+- TypeScript + React + Vite.
+- Local-first single-user MVP.
+- Canonical versioned design-document model.
+- DOM/CSS-first editor for product UI; SVG for vector primitives.
+- Structured, revision-aware AI patches.
+- SQLite metadata/revisions and project-scoped filesystem assets.
+- Provider-neutral model adapters.
+- Isolated preview runtime.
+- One command service shared by UI, AI and later MCP adapters.
+
+The detailed stack remains subject to Phase 1 spikes. See [architecture](docs/ARCHITECTURE.md), [tech stack](docs/TECH_STACK.md), [design document model](docs/DESIGN_DOCUMENT_MODEL.md) and [decisions](docs/decisions/DECISIONS.md).
+
+## Repository structure
 
 ```text
-unified-design-studio/
-├── research/
-│   ├── targets/                 # One research profile per target product
-│   ├── evidence/                # Capture records, observations and evidence IDs
-│   ├── screenshots/             # Research screenshots
-│   ├── framework-analysis/      # Framework and implementation-pattern analysis
-│   ├── feature-matrix/          # Cross-product comparison
-│   └── REA-WINDOWS-ANTIGRAVITY.md
-├── docs/                        # Product, architecture, security and API documents
-│   └── decisions/               # Architecture decision records
-├── apps/studio/                 # Main studio application (not implemented)
-├── packages/                    # Reusable editor and engine packages (not implemented)
-├── server/                      # Local API, persistence, storage and workers (not implemented)
-├── tests/                       # Unit, integration, visual and end-to-end tests
-└── README.md
+research/       Product dossiers, evidence, screenshots and feature matrix
+docs/           Product spec, architecture, schema, API, security, roadmap, ADRs
+apps/studio/    Main studio application (not implemented)
+packages/       Reusable document, renderer, editor and AI packages (not implemented)
+server/         Local service, persistence, storage and workers (not implemented)
+tests/          Unit, integration, visual and E2E tests
 ```
 
-## Core product direction
+## Phase 0 caveat
 
-The proposed workflow is:
-
-**Brief / PRD / reference → screen plan → generated screens → direct editing → responsive preview → clickable prototype → React/CSS export.**
-
-The product is not intended to be nine embedded clones. The aim is one coherent workspace with a canonical, versioned design document shared by the canvas, renderer, AI patch engine, prototype and code exporter.
-
-## Key documents
-
-| Document | Purpose |
-|---|---|
-| [Product spec](docs/PRODUCT_SPEC.md) | Draft user journey, functional requirements and MVP acceptance criteria |
-| [Architecture](docs/ARCHITECTURE.md) | Proposed system topology and implementation principles |
-| [Tech stack](docs/TECH_STACK.md) | Candidate technologies; not yet frozen |
-| [Design document model](docs/DESIGN_DOCUMENT_MODEL.md) | Conceptual shared document schema |
-| [Security](docs/SECURITY.md) | Trust boundaries and safety requirements |
-| [API contracts](docs/API_CONTRACTS.md) | Proposed internal operations and AI patch contract |
-| [Development roadmap](docs/DEVELOPMENT_ROADMAP.md) | Phase gates and implementation sequence |
-| [Decisions](docs/decisions/DECISIONS.md) | Provisional architecture decisions |
-
-## Research targets
-
-Claude Design · OpenDesign · Figma · Google Stitch · Penpot · Doop · Paper · v0 · UX Pilot.
-
-Each target folder contains a profile template. Public-source comparisons are consolidated in the feature matrix; record direct browser observations separately from documented claims and inferences.
-
-## Development principles
-
-1. Keep all product and architecture decisions explicitly provisional until validated.
-2. Use one versioned design document as the source of truth across editing, rendering, AI and export.
-3. Make AI changes as validated, revision-aware patches rather than unrestricted document rewrites.
-4. Start local-first and single-user; defer collaboration and cloud infrastructure until justified.
-5. Keep generated/imported content isolated from the trusted editor and protect provider secrets.
-6. Preserve evidence provenance: distinguish official documentation, direct observation, inference and unknowns.
-
-## Contributing / implementation
-
-No app, package or server runtime has been scaffolded yet. The directories under `apps/`, `packages/`, `server/` and `tests/` are reserved for the implementation phase. Start with Phase 0 exit criteria before treating the proposed stack or schema as final.
+Public-source research and architecture consolidation are complete for this pass. REA is a powerful browser-observation tool, not a sandbox. Do not disable endpoint protection or create exclusions to force an installer download. Resolve the exact McAfee detection using the file hash, official release signature/checksum and vendor guidance before installation. REA/Antigravity/CDP validation requires the user's local Windows environment.
