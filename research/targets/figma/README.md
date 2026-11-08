@@ -1,64 +1,65 @@
 # Figma — research dossier
 
-**Research status:** Official product and developer documentation reviewed 2026-11-08.  
-**Direct REA validation:** Pending.  
-**Implementation policy:** Proprietary product; use official APIs and user-authorized imports. Do not copy source code or proprietary assets.
+**Research status:** Public-source documentation review consolidated · **Direct REA validation:** Pending  
+**Research date:** 2026-11-08
 
 ## Product role
 
-Figma is the reference for a professional node-based design editor and its ecosystem: frames, layers, vector objects, reusable components, variants, variables, prototyping, libraries, collaboration and developer handoff.
+Figma is the professional visual-editing reference in this project. Its important contribution is not just the canvas; it is the structured design model around pages, frames, layers, reusable components, variables, modes, libraries and interactive prototypes.
 
-## Documented technical surface
+## Capabilities worth studying
 
-- The Plugin API can read and modify file contents, including nodes, hierarchy, properties, positions, colors and text.
-- The REST API can return a file's JSON document tree, nodes and rendered images, subject to scopes, file permissions and rate limits.
-- The Variables REST API supports querying, creating, updating and deleting variables, but write requirements are more restrictive: Enterprise plan access and an eligible Full seat/admin permission are required for relevant operations.
-- OAuth is the recommended integration pattern when acting on behalf of individual users. Personal access tokens are suitable for personal tooling; plan access tokens are organization/enterprise scoped.
-- Rate limits vary by seat type, endpoint tier and resource plan. UDS must batch, cache, expose 429 errors and respect Retry-After.
+- Hierarchical file/page/frame/layer editing.
+- Vector shapes and paths, text, layout constraints and reusable components.
+- Component properties, variants and shared libraries.
+- Variables with string, number, color and boolean types; collections and modes.
+- Prototyping actions that can update variable values, change component variants and alter visibility/layout.
+- Dev Mode and design inspection.
+- Plugin and widget APIs.
+- REST API access to file/node JSON, images, versions, comments, components/styles, variables, webhooks and related resources, subject to endpoint scopes and plan/access requirements.
 
 ## Architectural lessons for UDS
 
-1. Use a typed node tree with stable identifiers and explicit parent/child ownership.
-2. Separate component definitions from component instances and preserve instance overrides.
-3. Treat design tokens/variables as referenced values with modes and publication state, not just hex strings.
-4. Make prototype interactions part of the document model.
-5. Build a read-only Figma importer first, using OAuth and the user's existing file access.
-6. Map Figma node types to UDS node types with an explicit import report for unsupported/lossy properties.
+1. The layer tree and canvas must represent the same node graph.
+2. Components require definitions, instances, variants and explicit instance overrides.
+3. Design tokens need typed values, semantic aliases and modes—not just a color palette.
+4. Prototyping must model actions and state, not only static links between frames.
+5. An importer must preserve supported semantics and report unsupported/lossy constructs.
 
-## Access and integration constraints
+## UDS implementation mapping
 
-- No universal Figma access: the user must authorize the file and scopes.
-- Some API operations have seat/plan restrictions, including variables writes.
-- REST endpoints are rate limited and may be restricted by plan tier.
-- Import/export fidelity must be tested against actual files; do not promise full round-trip compatibility.
-- A Figma plugin bridge could be considered later for operations not available through public REST endpoints, with user-initiated installation and permissions.
+| Capability | UDS destination | Priority |
+|---|---|---|
+| Frames, layers, selection, properties | Canvas/editor engine | P0 |
+| Components and variants | Component engine | P0 |
+| Variables, aliases and modes | Token engine | P0 |
+| Prototype actions and states | Prototype engine | P1 |
+| SVG/vector paths and boolean operations | Vector subsystem | P2 |
+| Figma file import/export | Integration adapter | P1 |
 
-## Evidence status
+The Figma REST API is useful for reading structured files and resources, but we must not assume it provides arbitrary full-fidelity editing of every design object. Validate each endpoint and scope before promising round-trip editing. Figma is proprietary; use its official APIs and user-authorized exports rather than copying private implementation code or assets.
 
-| Finding | Classification |
-|---|---|
-| Plugin API read/write node model | Documented |
-| REST file/node JSON and image endpoints | Documented |
-| OAuth/PAT/plan-token options | Documented |
-| Variables API Enterprise/Full-seat constraints | Documented |
-| Internal Figma rendering and backend architecture | Unknown |
+## Direct REA validation plan
 
-## UDS capability mapping
-
-- Node/layer tree
-- Components, variants and overrides
-- Variables/tokens and modes
-- Vector editing
-- Interactive prototypes
-- Figma import adapter
-- Developer handoff
+In an authorized file, inspect a representative flow: create a frame; add text and vector objects; create a component and variant; bind a variable; switch modes; build a variable-driven prototype; inspect in Dev Mode; export or retrieve a file through approved API access. Record plan restrictions and the fidelity of each operation.
 
 ## Sources
 
-- https://www.figma.com/
-- https://developers.figma.com/docs/plugins/
-- https://developers.figma.com/docs/plugins/api/api-reference/
-- https://developers.figma.com/docs/rest-api/authentication/
-- https://developers.figma.com/docs/rest-api/file-endpoints/
-- https://developers.figma.com/docs/rest-api/variables/
-- https://developers.figma.com/docs/rest-api/rate-limits/
+- [Figma Developer Platform](https://developers.figma.com/)
+- [Figma REST API introduction](https://developers.figma.com/docs/rest-api/)
+- [Guide to variables](https://help.figma.com/hc/en-us/articles/15339657135383-Guide-to-variables-in-Figma)
+- [Use variables in prototypes](https://help.figma.com/hc/en-us/articles/14506587589399-Use-variables-in-prototypes)
+- [Variables in Dev Mode](https://help.figma.com/hc/en-us/articles/27882809912471-Variables-in-Dev-Mode)
+
+## Evidence log
+
+| Date | Workflow | Evidence | Status |
+|---|---|---|---|
+| 2026-11-08 | Official docs/API review | Links above | Documented research; direct REA validation pending |
+
+## Open questions
+
+- Which editing/prototyping properties are represented in REST responses?
+- Which variables and component fields can be written through APIs versus plugin APIs?
+- What export/import path best preserves Auto Layout and variable modes?
+- Which features are plan-gated for the account available to the researcher?
