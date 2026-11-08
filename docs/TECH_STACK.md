@@ -1,31 +1,47 @@
-# Technical stack proposal
+# Technical stack — Phase 0 recommendation
 
-**Status:** Provisional. These are candidate technologies from the architecture draft, not installed dependencies or frozen version selections. Validate them through implementation spikes before pinning versions.
+**Status:** Recommended baseline; implementation spikes in Phase 1 may change individual choices.  
+**Target environment:** Windows 11 laptop; local-first single-user MVP.
 
-| Layer | Candidate | Rationale / boundary |
+## Recommended stack
+
+| Concern | Recommendation | Why / caveat |
 |---|---|---|
-| Monorepo | pnpm workspaces; Turborepo optional | Shared contracts and types across the app, server and packages. |
-| Studio frontend | React + TypeScript + Vite | Client-heavy editor shell and fast local iteration. |
-| Styling | CSS variables + CSS Modules / custom CSS | Explicit, exportable tokens without coupling the document model to a UI kit. |
-| Canvas renderer | DOM/CSS renderer inside a sandboxed iframe | Web-native layout and closer mapping to frontend code. |
-| Editor controls | Parent-app overlays; SVG for bounds, handles, guides and vector primitives | Keeps editor chrome separate from rendered design content. |
-| Transient editor state | Zustand | Selection, viewport, active tools and interaction state. |
-| Durable document schema | TypeScript + Zod | Runtime validation for documents, migrations and AI patches. |
-| Local service | Node.js + TypeScript + Fastify (candidate) | Project/file operations and the provider proxy boundary. |
-| Persistence | SQLite + local asset directory | Local-first, single-user MVP. |
-| AI | Provider adapters (Gemini / OpenAI-compatible initially; others later) | Provider-neutral editor logic. |
-| Agent access | Internal command API first; MCP adapter after stabilization | Avoid coupling the design model directly to MCP. |
-| Preview / code runner | Sandboxed iframe or isolated process with restrictive CSP | Imported and generated content is untrusted. |
-| Tests | Vitest + Playwright + screenshot regression | Document logic, user flows and visual output. |
-| Desktop packaging | Defer; evaluate Electron after browser MVP | Avoid early packaging complexity. |
+| Language | TypeScript | Shared types across app, local service and packages. |
+| Frontend | React + Vite | Mature ecosystem; fast local development. |
+| Monorepo | pnpm workspaces | Keep shared packages/contracts without adding Turborepo until build orchestration needs it. |
+| UI styling | CSS variables + CSS Modules or scoped styles | Avoid tying the document model to a utility-class framework. |
+| Accessible primitives | Radix UI where useful | Use primitives, not a prebuilt visual design language. |
+| Canvas state | Zustand | UI/editor interaction state only; persisted document remains separate. |
+| Schema validation | Zod | Runtime validation for document, patches and API inputs. |
+| Renderer | DOM/CSS for web-layout nodes; SVG for vector nodes and overlays | Validate in a Phase 1 spike. |
+| Local backend | Node.js + TypeScript + Fastify (or Express if MCP/library fit proves better) | Local API, jobs, persistence and provider adapters. Select one after a minimal benchmark/spike. |
+| Metadata/revisions | SQLite | Local-first, transactional metadata and revision records. |
+| Assets | Project-scoped filesystem storage | Avoid storing large binary assets in SQLite. |
+| AI provider adapters | Provider SDKs behind internal interface | API keys and model capabilities vary; do not assume subscription includes API quota. |
+| Structured output | Zod-validated JSON operations | Never trust raw model output. |
+| Preview | Sandboxed iframe for HTML/CSS; isolated process/container for executable server code | Iframe alone is not a sufficient sandbox for arbitrary backend code. |
+| Tests | Vitest + Playwright | Unit, integration and end-to-end visual interaction coverage. |
+| Collaboration later | Yjs only after single-user revision model is proven | CRDT adds complexity and must be justified. |
+| MCP later | Official MCP TypeScript SDK | Expose narrow operations over the internal command service. |
 
-## Validation spikes
+## Explicitly not frozen yet
 
-1. Render 100–300 nested nodes from a design JSON document.
-2. Implement selection, drag, resize and inline text editing across the iframe boundary.
-3. Validate flex/grid layout behavior and parent-frame resizing.
-4. Apply a scoped AI patch while preserving unrelated node IDs and styles.
-5. Export a document to React/CSS and compare it with the editor preview.
-6. Test autosave, undo/redo, revision restore and crash recovery.
+- Electron vs Tauri vs browser-only local app. Start with browser-based local development; choose packaging after MVP usability and OS integration needs are known.
+- Fastify vs Express. Choose after a minimal local-service and streaming prototype.
+- Tailwind vs CSS Modules. The design document must be framework-independent; exporter adapters can target Tailwind if desired.
+- Zustand vs another UI state store. Keep document state separate so this can change.
+- Database migration/versioning library. Select during Phase 1.
 
-Do not pin package versions until implementation begins and compatibility is verified. The product requirements and trust boundaries take precedence over speculative version numbers.
+## Runtime support
+
+Use an actively supported Node.js LTS line at implementation time and pin the package manager/runtime in project configuration. Do not copy version numbers from target products as UDS requirements.
+
+## Architecture constraints
+
+1. Design nodes must not store framework-specific class strings as their semantic layout.
+2. The canonical model must describe CSS-like layout intent and export it to supported frameworks.
+3. Every persisted document is schema-versioned and migratable.
+4. The renderer must be deterministic for a given document and renderer version.
+5. Generated code executes in a restricted preview boundary.
+6. API keys never enter the browser bundle or design file.
