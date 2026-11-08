@@ -1,60 +1,58 @@
-# Phase 0 — status and task accounting
+# Phase 0 — research, architecture and validation status
 
 **Last updated:** 2026-11-08  
-**Status:** In progress — public-source desk research baseline prepared; local REA validation not yet performed.
+**Status:** Public-source research and documentation consolidation complete; local REA installation/observation remains blocked on the user's Windows environment.
 
-## Task accounting (16 top-level tasks)
+## Accounting note
 
-| # | Task | Status | Notes |
+The original 16-item checklist counted repository setup, research structure, REA setup, MCP connection, browser profile, nine product investigations, feature matrix and final requirements. The user's earlier message reported 11/16. The previous committed tracker reported 12/16 by counting the feature matrix separately. To avoid silently rewriting history, this update uses **12/16 as the previous repository baseline**, then records the newly completed documentation work separately. Direct REA validation is a distinct evidence gate and has not been performed.
+
+## Top-level task status
+
+| # | Task | Status | Evidence / next action |
 |---:|---|---|---|
-| 1 | Create the GitHub repository | **Completed** | The remote repository exists: `worksomaganesh/Unified-Design-Studio`. |
-| 2 | Create the research folder structure | **Completed** | The requested research, documentation, app, package, server and test scaffolding is now in the repository. |
-| 3 | Set up REA on the HP Victus | Pending | Requires installation and terminal execution on the user's Windows machine. |
-| 4 | Connect REA to the AI coding environment through MCP | Pending | Local registration and Antigravity restart/verification remain to be done. |
-| 5 | Establish a dedicated browser profile for research | Pending | Requires launching Chrome with a separate profile and loopback-only CDP. |
-| 6 | Investigate Claude Design | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 7 | Investigate OpenDesign | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 8 | Investigate Figma | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 9 | Investigate Google Stitch | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 10 | Investigate Penpot | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 11 | Investigate Doop | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 12 | Investigate Paper | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 13 | Investigate v0 | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 14 | Investigate UX Pilot | **Completed — desk research** | Public-source findings are included in the consolidated feature matrix; hands-on REA validation remains. |
-| 15 | Create consolidated feature matrix | **Completed** | See `research/feature-matrix/FEATURE_MATRIX.md`. |
-| 16 | Document final technical and product requirements | In progress | Drafts are organized under `docs/`; validate and freeze them after direct REA observations. |
+| 1 | Create GitHub repository | Complete | Repository exists. |
+| 2 | Create research folder structure | Complete | Research/docs/apps/packages/server/tests structure exists. |
+| 3 | Install and verify REA on HP Victus | Blocked — local | User must install from official source and verify package/security status. Do not bypass McAfee. |
+| 4 | Connect REA to Antigravity via MCP | Blocked — local | Requires local MCP registration and tool visibility check. |
+| 5 | Create dedicated research browser profile | Blocked — local | Requires local Chromium/Chrome profile and loopback-only CDP. |
+| 6 | Research Claude Design | Desk research complete | Dedicated dossier updated; direct workflow observation pending. |
+| 7 | Research OpenDesign | Desk/source research complete | Dedicated dossier updated; upstream source/architecture/license reviewed. |
+| 8 | Research Figma | Desk research complete | Dedicated dossier updated; official API/variables/prototyping docs reviewed. |
+| 9 | Research Google Stitch | Desk research complete | Dedicated dossier updated; official 2026 announcements and MCP/SDK docs reviewed. |
+| 10 | Research Penpot | Desk/source research complete | Dedicated dossier updated; architecture and MPL-2.0 reviewed. |
+| 11 | Research Doop | Desk/source research complete | Dedicated dossier updated; README, package manifest, MCP source and AGPL-3.0 reviewed. |
+| 12 | Research Paper | Desk research complete | Dedicated dossier updated; HTML/CSS and MCP claims recorded for validation. |
+| 13 | Research v0 | Desk research complete | Dedicated dossier updated; GitHub, preview and Design Systems docs reviewed. |
+| 14 | Research UX Pilot | Desk research complete | Dedicated dossier updated; PRD/flow, Nodey and audit claims recorded for validation. |
+| 15 | Consolidated feature matrix | Complete | Updated to align with product dossiers and distinguish unknown from absent. |
+| 16 | Product and technical requirements | Documentation baseline complete | Product spec, architecture, stack, model, API and ADRs revised. Final evidence freeze waits for local REA observations. |
 
-### Count
+## Research deliverables completed in this pass
 
-- **12 / 16 tasks completed (75%).**
-- **4 / 16 tasks remain open or in progress.**
-- The nine products have been compared through public-source desk research. The product-specific folders are tracking templates; detailed per-product evidence notes still need to be added.
-- **0 / 9 direct REA browser validations completed.**
-- No application implementation has started; the `apps/`, `packages/`, `server/` and `tests/` directories are scaffolding.
+- Nine expanded product dossiers with product role, capabilities, architectural lessons, UDS mapping, license notes where relevant, official sources, evidence classification and direct REA test plan.
+- Updated comparative feature matrix and priority tiers.
+- Reconciled architecture decisions, including renderer/document boundary, local-first MVP, command service, design-system interchange, security and open-source reuse policy.
+- Updated product/technical architecture and stack recommendations.
+- Explicit direct-observation checklist and open questions per product.
 
-## Work completed in this phase
+## Evidence classes
 
-1. Created the GitHub repository and the requested project folder scaffold.
-2. Consolidated public-source desk research for nine target products.
-3. Compared capabilities across AI generation, canvas editing, design systems, prototyping, code output, collaboration and integrations.
-4. Identified the canonical, versioned design document as the shared model for the editor, AI generation, renderer, prototype and code exporter.
-5. Prepared Windows/Antigravity REA setup guidance with a dedicated browser profile, exact-origin allowlisting and loopback-only CDP.
-6. Drafted product requirements, architecture, provisional decisions and MVP acceptance criteria.
+- **Official documentation:** vendor docs, product announcements and API references.
+- **Source evidence:** upstream repository files such as README, package manifest, source and LICENSE.
+- **Direct observation:** not yet completed; requires REA connected to the user's local browser.
+- **Inference:** architecture lessons derived from documented behavior/source. Marked as inference, not asserted as private backend fact.
+- **Unknown:** details that public docs do not establish.
 
-## Remaining work
+## Remaining local-only work
 
-- Install and verify REA locally on the HP Victus.
-- Register and verify REA as an MCP server in Antigravity.
-- Launch a separate Chromium research profile with CDP on loopback and explicit origin allowlisting.
-- Complete detailed per-product research profiles with reproducible workflows, screenshots, evidence IDs and limitations.
-- Revise and approve the product and technical requirements against direct evidence before beginning Phase 1 implementation.
+1. Resolve the McAfee detection for the REA installer/package using the exact detection name, file hash and official release checksum/signature. Do not disable protection or add an exclusion.
+2. Install a verified REA release if security review permits.
+3. Connect REA to Antigravity and verify MCP tool discovery.
+4. Launch a separate browser profile with CDP bound only to 127.0.0.1 and explicit allowed origins.
+5. Run the reproducible workflows in each target dossier; capture screenshots and evidence IDs without recording credentials or private user data.
+6. Update each dossier with observed results and limitations, then re-review requirements.
 
-## Phase 0 exit criteria
+## Phase 0 exit gate
 
-Phase 0 is complete only when:
-
-- REA reports healthy startup and its MCP tools are visible in Antigravity.
-- The dedicated browser profile can be discovered by REA through `list_browser_targets`.
-- Every target has at least one reproducible workflow observation, screenshots and a capture/evidence record; where a product is unavailable without a subscription, that limitation is recorded rather than guessed.
-- Public-source claims, observed behavior, inferred implementation details and unknowns are clearly separated.
-- The feature matrix and product/technical requirements are updated against direct evidence and formally frozen for Phase 1.
+Phase 0 is **not fully closed** until the local REA checks above are completed or explicitly waived by the project owner. Public-source research and architecture decisions are now consolidated enough to prepare a Phase 1 renderer spike, but no app implementation has been started.
