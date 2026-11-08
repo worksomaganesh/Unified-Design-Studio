@@ -1,70 +1,71 @@
 # OpenDesign — research dossier
 
-**Canonical target:** https://github.com/nexu-io/open-design  
-**Research status:** Public documentation and source configuration inspected 2026-11-08.  
-**Direct REA validation:** Pending.  
-**License:** Apache-2.0 (verified in repository root LICENSE and package metadata).
+**Research status:** Public-source and source-repository review consolidated · **Direct REA validation:** Pending  
+**Research date:** 2026-11-08 · **Upstream repository:** [nexu-io/open-design](https://github.com/nexu-io/open-design)
 
 ## Product role
 
-OpenDesign is a local-first, agent-driven design workspace. It combines a local daemon, a web/desktop workspace, project artifacts, agent runtimes, skills, design systems and templates. It supports more than website mockups: prototypes, presentations, images, video/motion and other visual deliverables.
+OpenDesign is a local-first, open-source workspace for coding agents to create and refine prototypes and other visual artifacts. Its product architecture is particularly relevant to UDS because it separates reusable agent behavior, renderable design templates, brand systems and runnable plugins.
 
-## Source-inspected implementation clues
+## Capabilities and architecture documented upstream
 
-The current repository shows:
+- Four composable content planes: **plugins** (runnable workflows), **functional skills** (agent behavior), **design templates** (rendering blueprints) and **design systems** (brand rules/assets).
+- A web app built with Next.js 16 App Router, React 18 and TypeScript.
+- A Node 24 / Express daemon with SSE streaming and `better-sqlite3`.
+- An optional Electron desktop shell and sidecar/IPC integration.
+- Multiple agent runtimes and adapters, including CLI and Agent Client Protocol integrations.
+- Local projects and conversations, sandboxed artifact previews and export workflows.
+- A BYOK proxy for supported model providers, with an explicit network/SSRF boundary.
+- A portable `DESIGN.md` and registry-style approach to skills, templates, systems and plugins.
 
-- A pnpm monorepo with Node.js `~24` and pnpm `10.33.x` requirements.
-- A separate TypeScript daemon package (`apps/daemon`) and a Next.js web application (`apps/web`).
-- The web package uses React 18.3.1, Next.js 16, Tailwind CSS 4 and shared workspace packages (versions are repository snapshot values, not UDS recommendations).
-- The daemon uses TypeScript, Express, the MCP SDK, `better-sqlite3`, file/artifact stores and runtime adapters.
-- Agent skills, design systems (`DESIGN.md`), design templates and plugins are first-class, inspectable project resources.
-- Structured agent runtimes can write canonical project files while artifact/preview surfaces update from those writes.
-- The app supports local runtimes and BYOK provider endpoints; it also has a sandboxed artifact preview.
-
-These are source-inspected facts about this repository snapshot. They are not claims about every OpenDesign deployment or every optional adapter.
+The upstream README and architecture guide are the authority for exact implementation details; older architecture sketches in the upstream repository are explicitly marked as historical.
 
 ## Architectural lessons for UDS
 
-1. Separate the UI shell from the local project/agent daemon.
-2. Store projects and generated artifacts as inspectable files with metadata and revisions.
-3. Use a registry for model/agent adapters, templates, design systems and skills.
-4. Keep persistent project context and agent conversations; don't rebuild context from scratch each session.
-5. Provide an explicit provider/runtime configuration boundary.
-6. Stream tool and artifact events to the UI while keeping the design document as the durable source of truth.
+1. Separate **agent instructions**, **design-generation templates**, **brand/design systems** and **executable integrations**. They solve different problems and should not be one overloaded plugin format.
+2. Keep the project daemon as the authority for persistence, file operations and agent lifecycle; the browser UI should not become a second competing database.
+3. Use streaming events for long-running agent tasks while maintaining a durable project/conversation record.
+4. Make design systems portable and versionable. A human-readable guide should accompany machine-readable tokens and component metadata.
+5. A local-first tool needs explicit trust boundaries for filesystem access, imported files, provider credentials and preview execution.
 
-## What we should not copy blindly
+## UDS implementation mapping
 
-- OpenDesign's wide artifact scope (slides, media, audio/video and many agent runtimes) is broader than UDS MVP.
-- Its internal daemon and workspace implementation should be studied, not transplanted wholesale.
-- Apache-2.0 permits reuse subject to its conditions, but every dependency, notice, asset and copied file still needs a license/provenance review.
-- The McAfee alert on a downloaded installer is a separate security question. An Apache-2.0 license does not certify an executable as malware-free or safe.
+| OpenDesign pattern | UDS adaptation | Priority |
+|---|---|---|
+| Functional skills | Agent capability/instruction registry | P1 |
+| Design templates | Screen/page generation templates | P1 |
+| Design systems | Portable token + component package | P0 |
+| Plugins | Later integration extension points | P2 |
+| Local daemon + SQLite | Local project service + SQLite | P0 |
+| SSE agent output | Job/event stream | P1 |
+| Sandboxed preview | Isolated preview runtime | P0 |
 
-## Evidence status
+UDS should not copy OpenDesign's broad scope for slides, images, video or motion graphics in the first release. Our initial scope is product UI, prototypes and frontend handoff.
 
-| Finding | Classification |
-|---|---|
-| Apache-2.0 license | Source-inspected |
-| Node 24 / pnpm 10 package requirements | Source-inspected |
-| Next.js web app + separate TS daemon | Source-inspected |
-| SQLite store, MCP SDK and runtime registry | Source-inspected |
-| Desktop and local-first workflows | Documented/source-inspected |
-| Exact runtime behavior on the user's Windows laptop | Unknown until local validation |
+## License and reuse
 
-## UDS capability mapping
+The upstream repository declares **Apache License 2.0**. Reuse may be possible subject to the license, preservation of required notices, change notices for modified files, third-party licenses and a dependency/security review. Apache-2.0 does not grant rights to upstream names, trademarks or assets. No upstream code is being copied into UDS as part of this research phase.
 
-- Local workspace/daemon separation
-- Project and artifact persistence
-- Agent/runtime registry
-- Skill and design-system registries
-- Context-aware agent sessions
-- Sandboxed previews
+## Direct REA validation plan
+
+If the desktop/web app can be accessed legitimately, inspect: create project from brief; choose a design template; choose a design system; launch or connect an agent; observe streaming; edit output; reopen project; export artifact. Capture process/daemon boundaries only when observable and avoid collecting API keys, credentials or private project content.
 
 ## Sources
 
-- https://github.com/nexu-io/open-design
-- https://github.com/nexu-io/open-design/blob/main/README.md
-- https://github.com/nexu-io/open-design/blob/main/QUICKSTART.md
-- https://github.com/nexu-io/open-design/blob/main/package.json
-- https://github.com/nexu-io/open-design/blob/main/apps/daemon/package.json
-- https://github.com/nexu-io/open-design/blob/main/apps/web/package.json
-- https://open-design.ai/faq/
+- [OpenDesign GitHub repository](https://github.com/nexu-io/open-design)
+- [OpenDesign architecture](https://github.com/nexu-io/open-design/blob/main/docs/architecture.md)
+- [OpenDesign license](https://github.com/nexu-io/open-design/blob/main/LICENSE)
+- [OpenDesign product website](https://open-design.ai/)
+
+## Evidence log
+
+| Date | Workflow | Evidence | Status |
+|---|---|---|---|
+| 2026-11-08 | README, architecture and license source review | Upstream links above | Source review complete; direct browser observation pending |
+
+## Open questions
+
+- Which local project files are canonical and which are caches/artifacts?
+- What is the registry schema/versioning and plugin permission model?
+- How are preview capabilities isolated from the daemon?
+- Which capabilities require cloud services versus work entirely offline?
