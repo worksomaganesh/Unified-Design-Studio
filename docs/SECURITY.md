@@ -1,38 +1,43 @@
-# Security model
+# Security model and requirements
 
-**Status:** Requirements and design constraints for the proposed local-first MVP. This document is not a security audit or a claim that these controls are implemented.
+**Status:** Design requirements only. This document is not a security audit and does not claim controls are implemented.
 
 ## Trust boundaries
 
-1. **Trusted editor shell:** project navigation, tools, panels and user interaction.
-2. **Design document:** structured data; validate it on load, update and migration.
-3. **Preview runtime:** generated/imported HTML and JavaScript are untrusted and must not execute with the editor's privileges.
-4. **Local service and filesystem:** project and asset operations require narrow paths and explicit intent.
-5. **AI providers:** provider credentials and request payloads must be handled separately from design documents.
-6. **MCP / agent operations:** expose scoped commands; destructive, export and network operations need appropriate confirmation.
-7. **Research browser:** REA/CDP can inspect the dedicated browser profile and must remain isolated from normal browsing.
+1. Trusted studio shell and editor state.
+2. Canonical structured design document.
+3. Generated/imported HTML and assets.
+4. Preview runtime and generated application execution.
+5. Local service and filesystem.
+6. AI provider credentials and request payloads.
+7. MCP/agent clients.
+8. Research browser and REA/CDP session.
 
 ## Required controls
 
-- Render generated/imported content in a sandboxed iframe with restrictive Content Security Policy; use a separate process or stronger isolation for code execution when needed.
-- Use a narrow, validated message bridge between the preview iframe and editor. Validate origin, source and referenced node IDs.
-- Do not expose arbitrary `eval`, unrestricted parent-window access or broad filesystem operations.
-- Validate documents, AI patches, node IDs, operation types and revision numbers before mutation.
-- Apply patch operations transactionally where practical; retain before/after revisions for undo and audit.
-- Require explicit user action for external URL imports. Any server-side URL fetch must have an SSRF-safe policy.
-- Keep provider API keys out of the browser, design JSON, logs, screenshots and Git history. Use OS-appropriate secure storage or an encrypted local secret store.
-- Minimize sensitive content in logs and research evidence. Never collect cookies, tokens, passwords or private project content as research artifacts.
-- Scope MCP operations to the active project and require confirmation for destructive, export or network-sensitive actions.
-- Keep REA out of the production runtime. For research, use a dedicated browser profile, exact-origin allowlisting and CDP bound only to `127.0.0.1`.
+- Validate document schemas, migrations, node IDs, token references and AI patch operations.
+- Treat generated/imported markup and assets as untrusted.
+- Render preview in sandboxed iframe with restrictive CSP, separate origin where possible, and a narrow message bridge validating source, origin and node references.
+- Arbitrary generated server-side code requires process/container isolation and resource/network limits; an iframe is not sufficient.
+- Local file operations must be scoped to an explicit project root; prevent path traversal and symlink escapes.
+- External URL imports require user action, origin policy and SSRF protection for server-side fetches.
+- Keep provider API keys in the local service/OS secure store; never in browser bundles, design JSON, screenshots, logs or Git.
+- MCP operations are scoped to the active project and use the same validated command service as UI operations.
+- Destructive operations, external network actions and repository writes require explicit confirmation.
+- Minimize research evidence; never capture passwords, cookies, tokens or private project contents.
+- Review every third-party package, transitive dependency, license and security advisory before reuse.
 
-## Research-specific precautions
+## REA-specific precautions
 
-REA is a powerful browser-observation tool, not a sandbox. Do not disable endpoint protection or create exclusions to force installation. If security software flags a package, preserve the detection details and investigate before proceeding. Do not expose the CDP port to a LAN or the public internet.
+REA is a browser-observation tool, not a sandbox. CDP access can control and inspect the connected browser profile. Use a separate research profile, bind CDP only to 127.0.0.1, allowlist exact target origins, and close the browser after research. Do not expose the CDP port to a LAN or public internet.
 
-## Security validation before release
+If endpoint protection flags an REA installer/package, do not disable protection or add exclusions. Record the exact detection name, file hash, source URL, signature/checksum and version; verify against the official release and consult the security vendor before running it.
 
-- Test preview-origin isolation and iframe message validation.
-- Test path traversal and asset import boundaries in the local service.
-- Test malformed documents and malicious AI patch payloads.
-- Verify no provider secrets appear in browser storage, persisted design files, screenshots or logs.
-- Review dependency licenses, security advisories and notices before reusing any open-source code.
+## Release security tests
+
+- Preview origin/CSP and message-bridge tests.
+- Path traversal, symlink and asset-import boundary tests.
+- Malformed document and malicious AI patch tests.
+- Secret-leak scans across browser storage, files, logs and screenshots.
+- Generated-code resource/network isolation tests.
+- Dependency/license inventory and vulnerability scan.
