@@ -1,30 +1,31 @@
-# API contracts (proposed)
+# Internal API contracts — proposed v0
 
-**Status:** Draft interface boundaries only. No API routes, server processes or MCP tools are implemented in this repository yet. Final transport, authentication and exact request/response schemas must be decided during the implementation spikes.
+**Status:** Conceptual contracts for Phase 1; no API is implemented yet.
 
-## Contract principles
+## 1. Principles
 
-- The internal command API is the stable application boundary; MCP is an adapter over selected commands, not the source of business logic.
-- All document mutations identify the document and base revision.
-- Inputs are schema-validated; mutations return the new revision and a structured result.
-- Errors must be machine-readable and distinguish validation failures, missing resources, permission failures and revision conflicts.
-- Long-running generation, import, preview and export work must expose asynchronous status rather than blocking editor input.
+- Internal service commands are the single mutation boundary for UI, AI and later MCP clients.
+- Validate all input/output at runtime.
+- Scope every operation to an authorized local project/document.
+- Use revision preconditions for mutations.
+- Return typed errors; never silently discard unsupported operations.
+- Long-running generation/import/export is asynchronous and reports status.
 
-## Proposed command groups
+## 2. Command groups
 
-| Domain | Responsibilities |
+| Group | Operations |
 |---|---|
-| Projects | Create, list, rename, duplicate, archive, reopen and delete projects. |
-| Documents | Load, save, validate, migrate and snapshot versioned design documents. |
-| Nodes | Read and edit selected nodes; create, move, resize, reorder and delete supported node types. |
-| Design systems | Manage token sets, themes, component definitions, variants and instances. |
-| Generation | Produce screen plans and design directions from user-provided context. |
-| AI patches | Validate and apply revision-aware operations against stable node IDs. |
-| Preview / prototype | Render a document, manage viewport presets and resolve prototype navigation. |
-| Export | Produce React/CSS, tokens, assets and preview artifacts; report unsupported constructs. |
-| Integrations | Expose selected project/document actions to agent clients through a later MCP adapter. |
+| Projects | create/list/open/rename/duplicate/archive/delete |
+| Documents | load/save/validate/migrate/snapshot |
+| Nodes | create/update/move/resize/reorder/delete |
+| Design system | token/theme/component/variant operations |
+| UX planning | parse brief, propose flow, approve screen inventory |
+| Generation | generate direction, generate screen set, revise selection |
+| Prototype | connect frames, configure triggers/actions, preview |
+| Export | React/CSS, tokens, assets, image/SVG |
+| Integrations | later Figma/Penpot/GitHub/MCP adapters |
 
-## AI patch envelope (illustrative)
+## 3. AI patch envelope
 
 ```json
 {
@@ -33,34 +34,49 @@
   "operations": [
     {
       "op": "setText",
-      "nodeId": "text_9",
-      "value": "Book a pod"
+      "nodeId": "node_hero_title",
+      "value": "Design, build and ship"
     },
     {
       "op": "setStyleToken",
-      "nodeId": "button_2",
+      "nodeId": "node_primary_button",
       "property": "background",
-      "token": "color.action.primary"
+      "tokenId": "color.action.primary"
     }
   ],
-  "summary": "Updated the hero CTA and button treatment"
+  "summary": "Updated the hero message and primary action"
 }
 ```
 
-The identifiers and values above are examples only. The actual operation union, validation rules and response envelope are not frozen.
+This is illustrative, not the final operation union. Phase 1 defines allowed operations and Zod schemas.
 
-## Required mutation behavior
+## 4. Mutation lifecycle
 
-1. Validate the request schema and operation types.
-2. Confirm the document exists and the requested project scope is authorized.
-3. Compare `baseRevision` with the current document revision.
-4. Validate every referenced node and token.
-5. Apply the operation set atomically where practical.
-6. Persist the new revision and patch record.
-7. Return the new revision, applied operations and summary.
+1. Authenticate/authorize local project scope.
+2. Validate envelope and operation types.
+3. Check document ID and base revision.
+4. Validate node IDs, token IDs, asset references and operation permissions.
+5. Apply the complete operation batch transactionally.
+6. Persist new document revision and operation log.
+7. Return new revision, applied operations and summary.
+8. If revision is stale, return a conflict; do not silently overwrite.
 
-If the base revision is stale, return a conflict and do not apply the patch. The editor can then request a rebase or ask the user to resolve the conflict.
+## 5. Error categories
 
-## MCP boundary
+- `VALIDATION_ERROR`
+- `NOT_FOUND`
+- `PERMISSION_DENIED`
+- `REVISION_CONFLICT`
+- `UNSUPPORTED_OPERATION`
+- `ASSET_UNAVAILABLE`
+- `PROVIDER_ERROR`
+- `EXPORT_ERROR`
+- `INTERNAL_ERROR`
 
-Expose only selected commands after the internal API is stable. Keep permissions narrow and require confirmation for destructive, external-network and export operations. REA is a research tool and is not part of the product's MCP runtime.
+## 6. Async jobs
+
+Generation, import, screenshot, preview and export return a job ID and status stream. Events include accepted, progress, output-chunk, review-required, completed and failed. Persist job summaries; avoid logging secrets or full sensitive prompts by default.
+
+## 7. MCP boundary
+
+MCP is a thin adapter over the same internal command service. Initial read-only tools may expose project summary, document summary, selected nodes and design-system metadata. Write tools are added only after mutation validation and permission checks are stable. No arbitrary shell, filesystem or unrestricted network tool is exposed.
