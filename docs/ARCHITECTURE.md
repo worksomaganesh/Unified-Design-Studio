@@ -1,169 +1,96 @@
-# Technical architecture draft — Unified Design Studio
+# Technical architecture — Unified Design Studio
 
-**Status:** Provisional proposal after initial product desk research. Final choice is pending REA evidence and a prototype spike.  
-**Date:** 2026-11-08
+**Status:** Phase 0 accepted direction; implementation details subject to Phase 1 spikes.
 
-## 1. Architecture principles
+## 1. System overview
 
-1. **One canonical design document.** The canvas, AI, preview, prototyping and code export must operate on the same versioned data model.
-2. **DOM/CSS-first for product UI.** Prioritize web layout, typography, components, responsive rules and code fidelity. Use SVG for vector primitives and editor overlays.
-3. **AI produces validated patches.** Do not let an LLM freely mutate the whole application or inject arbitrary executable markup into the editor.
-4. **Local-first MVP.** Start with a single-user local project workspace. Add hosted collaboration after core editing and persistence are stable.
-5. **Provider-neutral AI.** Model APIs are adapters behind one internal contract.
-6. **Security boundaries are explicit.** Preview, imported content, local filesystem, MCP and provider secrets are separate trust domains.
-7. **Research tools stay out of product runtime.** REA is used during research and development; it is not a production dependency.
+UDS is a local-first, AI-native product design environment. Its core pipeline is:
 
-## 2. Proposed stack
+`Brief / PRD / references → UX plan → DesignDocument → editable canvas → prototype → code export`
 
-| Layer | Initial choice | Rationale |
-|---|---|---|
-| Monorepo | pnpm workspaces (Turborepo optional) | Shared types/contracts across app, server and packages. |
-| Editor frontend | React + TypeScript + Vite | Fast local iteration and a client-heavy editor shell. |
-| UI styling | CSS variables + CSS Modules/custom CSS | Tokens are explicit and exportable; avoid tying the document model to one UI kit. |
-| Canvas renderer | DOM/CSS node renderer in a sandboxed iframe | Web-native layout and closer design-to-code mapping. |
-| Editor controls | Parent-app overlays; SVG for selection bounds, handles, guides and vector paths | Keeps editor controls separate from rendered content. |
-| State | Zustand for transient editor state; versioned document model for durable state | Separates UI selection/viewport from the design document. |
-| Schema | TypeScript + Zod | Runtime validation of documents and AI patches. |
-| Local service | Node.js + TypeScript + Fastify (candidate) | Local project/file operations and AI provider proxy boundary. |
-| Persistence | SQLite + local asset directory | Good fit for single-user local-first mode. |
-| AI | Provider adapters (Gemini/OpenAI-compatible initially, others later) | Provider independence and model choice. |
-| Agent connectivity | Internal command API first; MCP adapter after stabilization | Avoid coupling the design model directly to MCP. |
-| Preview/code runner | Isolated iframe/process with strict origin and CSP policy | Imported/generated code is untrusted. |
-| Tests | Vitest + Playwright + screenshot regression | Validate document logic, user flows and visual output. |
-| Desktop shell | Defer; evaluate Electron after browser MVP | Avoid installation and packaging risk during the first engineering slice. |
+The canonical `DesignDocument` is the shared source of truth. The DOM renderer is a projection of that model; it is not the model itself.
 
-The chosen versions should be pinned only when implementation begins; the requirements are more important than speculative version numbers.
+## 2. Logical components
 
-## 3. System topology
+- **Studio UI:** project navigation, conversation, canvas, layers, inspector, asset panel and preview.
+- **Document core:** typed node graph, schema validation, stable IDs, migrations, tokens, components and revisions.
+- **Renderer:** deterministic mapping from supported document nodes/layout semantics to DOM/CSS and SVG.
+- **Editor interaction engine:** selection, hit testing, pan/zoom, drag, resize, snapping, keyboard actions and undo/redo.
+- **AI orchestration:** provider adapters, context assembly, UX planning, screen generation, structured patch generation and review.
+- **Prototype runtime:** navigation graph, triggers, actions, variables and component state.
+- **Code exporter:** maps the canonical model to React/CSS and assets; unsupported constructs are reported.
+- **Local service:** project operations, SQLite metadata, revision persistence, asset paths, background jobs and provider secrets.
+- **Integration adapters:** Figma/Penpot import/export, GitHub and MCP; add only after core command contracts stabilize.
+
+## 3. Trust and data flow
 
 ```text
-React editor shell
-  ├─ Project/workspace UI
-  ├─ Chat + selection context
-  ├─ Canvas viewport + transform
-  ├─ Layer tree + property inspector
-  └─ Preview/prototype mode
-          │
-          ├──────── Design Document API ────────┐
-          │                                      │
-          ▼                                      ▼
-  Editor state (Zustand)                Versioned DesignDocument
-  selection / viewport / tools         pages / frames / nodes / tokens
-                                                 │
-                           ┌─────────────────────┼──────────────────┐
-                           ▼                     ▼                  ▼
-                       Renderer            AI patch engine     Code exporter
-                       iframe DOM/CSS       validated ops       React + CSS
-                           │                     │                  │
-                           └─────────────────────┴──────────────────┘
-                                                 │
-                                        Local Node service
-                                  SQLite / assets / revisions / providers
-                                                 │
-                                     AI provider adapters / MCP adapter
+Studio UI ──commands──> Application command service
+  │                           │
+  │                           ├──> Document core + validator
+  │                           ├──> SQLite revisions + local assets
+  │                           ├──> AI orchestration ──> model provider adapters
+  │                           ├──> Renderer ──> isolated preview
+  │                           └──> Code exporter ──> restricted code preview
+  │
+  └──> Editor interaction state (selection, viewport, transient drag)
+
+Later adapters:
+MCP ──> same application command service
+GitHub/Figma/Penpot adapters ──> explicit import/export services
+REA ──> separate research browser only; never production runtime
 ```
 
-## 4. Canonical design document (proposed v0)
+## 4. Document and renderer boundary
 
-```ts
-type DesignDocument = {
-  schemaVersion: number;
-  id: string;
-  name: string;
-  metadata: { createdAt: string; updatedAt: string; platform: "web" };
-  themeIds: string[];
-  tokenSets: TokenSet[];
-  components: ComponentDefinition[];
-  pages: Page[];
-  assets: AssetReference[];
-  prototype: PrototypeGraph;
-};
+- Persist semantic nodes, layout properties, style/token references and relationships.
+- Renderer resolves tokens and layout into DOM/CSS/SVG.
+- Editor overlays are not serialized as design nodes.
+- Direct manipulation emits typed document commands.
+- Preview is isolated from the trusted editor and receives only the minimum document/assets needed.
+- Exporter consumes the same validated document and reports unsupported semantics.
 
-type Page = { id: string; name: string; frameIds: string[] };
+## 5. AI mutation lifecycle
 
-type Frame = {
-  id: string;
-  name: string;
-  width: number;
-  height: number;
-  breakpoint?: string;
-  rootNodeIds: string[];
-};
+1. Assemble context from brief, approved screen plan, selected node(s), relevant tokens/components and current document revision.
+2. Ask model adapter for a structured operation list.
+3. Validate schema, operation permissions, node references, asset references and base revision.
+4. Show a change summary/diff for material changes.
+5. Apply atomically to a new revision.
+6. Render and run structural/visual checks.
+7. Keep undo/restore path.
 
-type DesignNode = {
-  id: string;
-  type: "frame" | "group" | "text" | "image" | "rect" | "ellipse" | "line" | "component-instance";
-  name: string;
-  parentId: string | null;
-  children: string[];
-  layout: LayoutSpec;
-  style: StyleSpec;
-  content?: unknown;
-  componentRef?: string;
-  variantProps?: Record<string, string | number | boolean>;
-};
-```
+AI never receives unrestricted authority to mutate the local filesystem or execute code in the editor process.
 
-This is a conceptual sketch, not a final implementation schema. Before coding, add normalized ID ownership, constraints, token references, asset provenance, interaction state, accessibility metadata, z-order, text runs, component overrides and migration rules.
+## 6. Rendering approach
 
-## 5. Rendering and editing strategy
+Start with DOM/CSS for application UI nodes: frames, containers, text, images, buttons, forms and layout groups. Use CSS Grid/Flex as first-class layout semantics. Use SVG for paths, icons and geometric primitives. Do not initially attempt a complete vector editor.
 
-- Render the model into a dedicated iframe using a renderer package; include stable `data-node-id` attributes.
-- Keep editor chrome, toolbars, panels and overlays in the parent React app to prevent style leakage.
-- Use a transformable viewport for pan/zoom; maintain world coordinates separately from screen coordinates.
-- Use pointer capture and explicit interaction state machines for select, drag, resize, text edit, pan and marquee selection.
-- Use an SVG overlay for selection outlines, anchors, resize handles, guides and snapping indicators.
-- The iframe communicates with the parent through a narrow message protocol. Validate message origin/source and node IDs; do not expose arbitrary `eval` or unrestricted parent access.
-- Start with a supported subset of CSS properties/layout rather than pretending to implement every CSS feature. Unsupported constructs must be surfaced in the editor/export report.
+Phase 1 must prove:
+- deterministic render of a schema-valid document;
+- selection overlay and stable node hit testing;
+- pan/zoom without changing document geometry;
+- drag/resize translated into document commands;
+- inline text editing;
+- responsive layout at two viewport widths;
+- visual regression tests.
 
-## 6. AI patch contract
+## 7. Local persistence
 
-AI output should be structured operations, for example:
+SQLite stores project metadata, document revision metadata, operation history and indexes. The canonical document can be stored as versioned JSON blobs or normalized records; choose after the Phase 1 migration/transaction spike. Binary assets live in project-scoped directories with hashes and metadata in SQLite.
 
-```json
-{
-  "documentId": "doc_123",
-  "baseRevision": 12,
-  "operations": [
-    { "op": "setText", "nodeId": "text_9", "value": "Book a pod" },
-    { "op": "setStyleToken", "nodeId": "button_2", "property": "background", "token": "color.action.primary" }
-  ],
-  "summary": "Updated the hero CTA and button treatment"
-}
-```
+Autosave writes new revisions transactionally. Undo/redo uses command history; named snapshots provide restore points. Do not use localStorage as the authoritative project database.
 
-The server validates schema, operation type, target IDs, user permission and base revision. If the base revision is stale, return a conflict and ask the model to rebase or ask the user to resolve it. Apply all-or-nothing transactions where practical; record the patch and before/after revision for undo.
+## 8. AI provider architecture
 
-## 7. Persistence and versioning
+A provider adapter exposes model capabilities, structured generation, streaming, image input and tool support. Model selection is independent from the editor and document model. Consumer chat subscriptions are not assumed to provide API access.
 
-- SQLite tables for projects, documents, revisions, asset metadata and provider configuration references.
-- Assets stored as files with content hashes and database metadata.
-- Save document snapshots plus compact operations between snapshots.
-- Keep undo/redo local to an editor session; persist stable revision checkpoints.
-- Store provider API keys in OS-appropriate secure storage or an encrypted local secret store, never in design JSON or Git.
+## 9. Collaboration and MCP
 
-## 8. Security model
+The first release is single-user. Stable IDs, revision checks and command boundaries prepare for later collaboration. Yjs/CRDT is deferred until actual simultaneous editing is required.
 
-- Generated/ imported HTML and JavaScript must not execute in the trusted editor origin.
-- Prefer a sandboxed iframe with restrictive CSP and a narrow message bridge; consider separate process/container isolation for code execution.
-- Imported URLs require explicit user action and an SSRF-safe fetch policy if processed server-side.
-- MCP tools use scoped project permissions and confirmation for destructive/export/network operations.
-- No tokens, cookies or credentials in logs, screenshots, research evidence or repository history.
-- REA browser observation remains in a dedicated profile with exact origin allowlisting and loopback-only CDP.
+MCP is a thin adapter over the same command service used by the UI. It must expose scoped tools, not arbitrary shell or filesystem access. REA is not the product's MCP implementation.
 
-## 9. Implementation spikes required before final stack freeze
+## 10. Explicit non-goals
 
-1. Render 100-300 nested nodes from a design JSON document without editor overlay.
-2. Add selection, drag, resize and inline text editing across iframe boundary.
-3. Implement flex/grid layout and resize parent frames without losing user intent.
-4. Apply an AI patch to a selected region while preserving unrelated node IDs and styles.
-5. Export the same document to React/CSS and compare rendered output against editor preview.
-6. Test autosave, undo/redo and crash recovery.
-
-## 10. Deferred architecture
-
-- Collaboration: evaluate Yjs/CRDT only after single-user editing semantics are stable.
-- Vector editing: expand SVG path/boolean operations after product-UI editing MVP.
-- Cloud hosting: add auth, multi-tenant PostgreSQL and object storage only when there is a real collaboration requirement.
-- Desktop packaging: evaluate Electron/Tauri after browser-first workflow is proven.
-- Importers: Figma/Penpot and HTML/site import use dedicated adapters with explicit loss reports.
+No private backend reverse engineering, credential extraction, unauthorized scraping, full Figma parity, video/slide editor, real-time collaboration or cloud marketplace in MVP.
