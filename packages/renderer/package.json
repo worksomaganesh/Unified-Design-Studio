@@ -1,0 +1,10 @@
+{
+  "name": "@uds/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": { "@uds/design-core": "workspace:*" },
+  "devDependencies": { "typescript": "^5.8.2" }
+}
