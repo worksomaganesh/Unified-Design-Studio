@@ -1,6 +1,6 @@
 # Product specification — Unified Design Studio
 
-**Status:** Phase 0 product baseline; ready for Phase 1 spike, subject to direct REA findings.  
+**Status:** Product baseline; updated for laptop/desktop-only use, with Phase 4 design-system work underway.
 **Target user:** Single product builder/designer/developer working locally.
 
 ## 1. Product vision
@@ -11,14 +11,14 @@ UDS combines capabilities observed across nine reference products; it is not int
 
 ## 2. Core workflow
 
-1. Create a local project and choose a target platform/device.
+1. Create a local desktop project.
 2. Provide a brief, PRD, screenshots, assets, website reference or codebase context.
 3. AI proposes a user-flow graph and screen inventory.
 4. User approves or edits the plan.
 5. AI generates multiple design directions and connected screens as structured nodes.
-6. User directly edits layout, content, tokens, components and responsive rules.
+6. User directly edits desktop layout, content, tokens and components.
 7. User selects a region/component and asks AI for a scoped revision.
-8. User previews breakpoints, runs UX/accessibility checks and connects screens.
+8. User previews laptop/desktop layouts, runs UX/accessibility checks and connects screens.
 9. User tests a clickable prototype.
 10. User exports React/CSS, tokens and assets or hands off to a local codebase.
 
@@ -35,7 +35,7 @@ UDS combines capabilities observed across nine reference products; it is not int
 - Brief/PRD to UX flow and three related editable screens.
 - At least two design directions.
 - Selection-scoped AI editing using validated revision-aware patches.
-- Desktop/mobile responsive preview.
+- Laptop/desktop preview; mobile and tablet artboards are out of scope.
 - Basic clickable prototype navigation and state.
 - React/CSS/token export and restricted live preview.
 
@@ -61,7 +61,7 @@ UDS combines capabilities observed across nine reference products; it is not int
 
 ## 5. Non-functional requirements
 
-- Keep typical product UI documents with several hundred nodes responsive; benchmark before setting hard performance claims.
+- Keep typical desktop product documents with several hundred nodes interactive; benchmark before setting hard performance claims.
 - Autosave must not block canvas input.
 - Renderer output should be deterministic for a document and renderer version.
 - All persisted data is schema-versioned and migratable.

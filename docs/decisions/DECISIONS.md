@@ -15,7 +15,7 @@
 
 ## ADR-003 — DOM/CSS-first product canvas; SVG for vector primitives
 **Decision:** Prioritize web-native UI layout using explicit box, flex and grid semantics. Use SVG for paths/shapes and editor overlays.  
-**Reason:** UDS's main output is responsive product UI and frontend code. Paper/Doop/Penpot show the value of web-native semantics; Penpot also demonstrates why vector editing should be a distinct subsystem.  
+**Reason:** UDS's main output is desktop product UI and frontend code. Paper/Doop/Penpot show the value of web-native semantics; Penpot also demonstrates why vector editing should be a distinct subsystem.
 **Consequences:** Advanced Bézier editing, boolean geometry and general-purpose illustration tools are deferred. A renderer spike must validate layout fidelity before freezing the schema.
 
 ## ADR-004 — Structured, revision-aware AI patches
@@ -59,7 +59,7 @@
 **Consequences:** CSP, origin checks, restricted bridge, network policy and resource limits are release gates.
 
 ## ADR-012 — MVP is a complete vertical slice
-**Decision:** MVP: brief → UX flow/screen plan → three editable screens → direct + AI editing → responsive preview → clickable prototype → React/CSS export.  
+**Decision:** MVP: brief → UX flow/screen plan → three editable desktop screens → direct + AI editing → laptop/desktop preview → clickable prototype → React/CSS export.
 **Reason:** Proves the product end-to-end rather than creating disconnected demos.  
 **Consequences:** Advanced collaboration, vector tooling and broad import/export are post-MVP.
 

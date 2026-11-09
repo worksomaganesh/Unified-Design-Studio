@@ -1,6 +1,6 @@
 # Technical architecture — Unified Design Studio
 
-**Status:** Phase 0 accepted direction; implementation details subject to Phase 1 spikes.
+**Status:** Phase 1 baseline. Package boundaries and data contracts are specified; implementation remains incremental.
 
 ## 1. System overview
 
@@ -72,18 +72,18 @@ Phase 1 must prove:
 - pan/zoom without changing document geometry;
 - drag/resize translated into document commands;
 - inline text editing;
-- responsive layout at two viewport widths;
+- desktop layout at laptop and wide-desktop artboard sizes;
 - visual regression tests.
 
 ## 7. Local persistence
 
-SQLite stores project metadata, document revision metadata, operation history and indexes. The canonical document can be stored as versioned JSON blobs or normalized records; choose after the Phase 1 migration/transaction spike. Binary assets live in project-scoped directories with hashes and metadata in SQLite.
+SQLite stores project metadata, document revision metadata, operation history, asset metadata and asynchronous job summaries. The canonical document snapshot is versioned JSON; relational records index project/document/revision boundaries without duplicating the node graph. The initial schema is specified in [DATABASE_SCHEMA.sql](DATABASE_SCHEMA.sql). Binary assets live under project-scoped directories and are addressed by relative path plus SHA-256 metadata. Database writes and revision creation are transactional; filesystem writes use temporary files followed by atomic rename before the DB transaction references them.
 
 Autosave writes new revisions transactionally. Undo/redo uses command history; named snapshots provide restore points. Do not use localStorage as the authoritative project database.
 
 ## 8. AI provider architecture
 
-A provider adapter exposes model capabilities, structured generation, streaming, image input and tool support. Model selection is independent from the editor and document model. Consumer chat subscriptions are not assumed to provide API access.
+A provider adapter exposes model capabilities and translates requests and responses independently from the editor and document model. Current Phase 5 adapters support image input and validated JSON output; streaming and provider tools are not implemented. The orchestrator owns task planning, context assembly, schema validation, revision preconditions and user review. Consumer chat subscriptions are not assumed to provide API access. Keys are entered through a password field and sent to the local service for OS-vault storage; they are not persisted in browser storage, logs or project documents, and are not returned after saving.
 
 ## 9. Collaboration and MCP
 

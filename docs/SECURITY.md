@@ -1,6 +1,6 @@
 # Security model and requirements
 
-**Status:** Design requirements only. This document is not a security audit and does not claim controls are implemented.
+**Status:** Security requirements and implementation notes. This document is not a security audit and does not claim all controls are implemented.
 
 ## Trust boundaries
 
@@ -17,15 +17,26 @@
 
 - Validate document schemas, migrations, node IDs, token references and AI patch operations.
 - Treat generated/imported markup and assets as untrusted.
-- Render preview in sandboxed iframe with restrictive CSP, separate origin where possible, and a narrow message bridge validating source, origin and node references.
+- Verify uploaded raster signatures; serve reference-only SVG/PDF files as attachments with `nosniff` instead of rendering them in the Studio origin.
+- Render preview in a sandboxed iframe with restrictive CSP and a narrow message bridge validating source and interaction references.
 - Arbitrary generated server-side code requires process/container isolation and resource/network limits; an iframe is not sufficient.
 - Local file operations must be scoped to an explicit project root; prevent path traversal and symlink escapes.
 - External URL imports require user action, origin policy and SSRF protection for server-side fetches.
-- Keep provider API keys in the local service/OS secure store; never in browser bundles, design JSON, screenshots, logs or Git.
+- Keep provider API keys in the local service/OS secure store; never in browser bundles, persistent browser storage, design JSON, screenshots, logs or Git. A key is briefly present in the password field and local-service request body during setup.
 - MCP operations are scoped to the active project and use the same validated command service as UI operations.
 - Destructive operations, external network actions and repository writes require explicit confirmation.
 - Minimize research evidence; never capture passwords, cookies, tokens or private project contents.
 - Review every third-party package, transitive dependency, license and security advisory before reuse.
+
+## Current AI boundary notes
+
+- Provider keys are handled by the local service. On Windows, the service stores keys in Windows Credential Manager; on other platforms it reads provider-specific environment variables. Keys are not returned to the browser after save.
+- Credential write/delete routes accept only HTTP loopback origins used by the local Studio/API and reject cross-site Fetch Metadata.
+- Provider requests use HTTPS and the selected provider's authentication header. Only explicitly selected project images are loaded for image input. The API validates project ownership and asset paths and caps selection at three images, 4 MB each, and 8 MB total.
+- Planning and generation send the brief and a compact document summary. Selection revision sends a compact document summary plus selected layer summaries. The full document is not sent.
+- AI output is untrusted: Zod validates generated plans, directions, and patch operations; patches are restricted to selected node IDs and compatible node types. Provider calls do not write documents or execute model-generated code.
+- These controls have not received a full security audit. The Windows credential helper and live provider request still need runtime verification.
+- Prototype preview uses an opaque-origin iframe sandbox without same-origin permission, blocks outbound connections, limits image sources to loopback, and accepts messages only from its own iframe window after matching stored interaction definitions.
 
 ## REA-specific precautions
 

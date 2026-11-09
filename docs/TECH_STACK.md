@@ -16,7 +16,7 @@
 | Schema validation | Zod | Runtime validation for document, patches and API inputs. |
 | Renderer | DOM/CSS for web-layout nodes; SVG for vector nodes and overlays | Validate in a Phase 1 spike. |
 | Local backend | Node.js + TypeScript + Fastify (or Express if MCP/library fit proves better) | Local API, jobs, persistence and provider adapters. Select one after a minimal benchmark/spike. |
-| Metadata/revisions | SQLite | Local-first, transactional metadata and revision records. |
+| Metadata/revisions | Node.js `node:sqlite` synchronous SQLite API (Node 24+) | Local-first, transactional metadata and revision records without a native addon build step; keep database calls short and inside the local service. |
 | Assets | Project-scoped filesystem storage | Avoid storing large binary assets in SQLite. |
 | AI provider adapters | Provider SDKs behind internal interface | API keys and model capabilities vary; do not assume subscription includes API quota. |
 | Structured output | Zod-validated JSON operations | Never trust raw model output. |
@@ -31,11 +31,13 @@
 - Fastify vs Express. Choose after a minimal local-service and streaming prototype.
 - Tailwind vs CSS Modules. The design document must be framework-independent; exporter adapters can target Tailwind if desired.
 - Zustand vs another UI state store. Keep document state separate so this can change.
-- Database migration/versioning library. Select during Phase 1.
+- Dedicated migration library. The local service currently applies ordered, checked-in SQL migrations transactionally.
 
 ## Runtime support
 
-Use an actively supported Node.js LTS line at implementation time and pin the package manager/runtime in project configuration. Do not copy version numbers from target products as UDS requirements.
+Use Node.js 24 or newer for the built-in SQLite API and pin the package manager/runtime in project configuration. Do not copy version numbers from target products as UDS requirements.
+
+Phase 5 currently implements provider adapters with direct HTTPS REST calls behind an internal interface. This avoids provider SDK coupling while the capability contract stabilizes; streaming and provider tools are not available yet.
 
 ## Architecture constraints
 

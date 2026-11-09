@@ -1,80 +1,48 @@
 # Development roadmap
 
-**Current phase:** Phase 0 — research and architecture baseline consolidated; local REA validation pending.  
-**No delivery dates are committed.**
+**Current phase:** Phase 8 — Imports, exports and interoperability (35% complete). Provenance-aware raster-image and SVG/PDF reference imports are implemented. Figma/Penpot interchange and the narrow MCP adapter remain. Phase 7 is set aside at 95%, with hands-on output review pending; Phase 6 preview review, Phase 5 live provider smoke verification, and Phase 3 desktop visual review are also open.
+Phase names and numbering follow the project owner's 0–10 plan. No delivery dates are committed.
 
-## Phase 0 — Research and architecture validation
+## Phase 0 — Intelligence gathering and reverse engineering
 
-Completed in repository:
-- Public-source research for all nine target products.
-- Nine expanded product dossiers, with sources, architecture lessons, implementation mapping and direct-observation test plans.
-- Updated feature comparison and priorities.
-- Reconciled architecture decisions and technology recommendation.
-- Updated product requirements, architecture, design model and security/API boundaries.
+Research nine design products with source-backed dossiers, comparative feature matrix and documented direct observations. Desk research is recorded; direct REA evidence is still a separate validation track.
 
-Remaining local-only gate:
-- Verify REA installer/package and resolve endpoint-protection detection safely.
-- Install and verify REA on the HP Victus if the artifact is trusted.
-- Connect REA to Antigravity through MCP.
-- Configure a dedicated browser profile and loopback-only CDP.
-- Run reproducible observations for accessible products; record plan/access limitations for unavailable products.
-- Update dossiers with screenshots, evidence IDs and observed behavior.
+## Phase 1 — Product architecture and technical specification
 
-**Exit gate:** Public claims, source evidence, direct observation, inference and unknowns are distinguished; local REA setup is verified or explicitly waived; product/technical requirements are approved. Phase 0 documentation is consolidated, but the full REA evidence gate is still open.
+Define system boundaries, canonical design document, layer/component hierarchy, AI and rendering pipelines, storage/versioning, API/security contracts, database schema and development backlog. The architecture baseline is in `ARCHITECTURE.md`, `DESIGN_DOCUMENT_MODEL.md`, `API_CONTRACTS.md`, `SECURITY.md`, `DATABASE_SCHEMA.sql` and `DEVELOPMENT_BACKLOG.md`.
 
-## Phase 1 — Design model and renderer spike
+## Phase 2 — Application foundation and workspace
 
-Build a small technical proof, not the full application:
-- TypeScript package for document schema, Zod validation and migrations.
-- Node types: document/page/frame/container/text/image/shape/component instance.
-- Layout semantics: fixed, flex and grid.
-- Stable IDs and document revision.
-- Deterministic DOM/CSS renderer.
-- SVG selection/transform overlays.
-- Pan/zoom, selection, drag, resize and inline text editing.
-- Visual regression tests at desktop and mobile widths.
+Deliver a local project workspace with creation, opening, rename/archive, initial persistence, assets, preferences, navigation and keyboard command access. The project shell and local service are implemented; the create/open project exit gate is in place.
 
-**Exit gate:** A saved schema-valid document renders deterministically and can be edited without losing node identity.
+## Phase 3 — Core design canvas and rendering engine (desktop visual review pending)
 
-## Phase 2 — Studio editing vertical slice
+Build the non-AI visual editor for laptop and desktop use: viewport pan/zoom, laptop/desktop artboards, pages, nested layers, text/shapes/images, transforms/alignment, flex/grid controls, property inspector, undo/redo and persisted revisions. Editing features are implemented. The desktop visual review is still open because Chrome and a separate shell timed out reaching the sandboxed loopback server. See [`LOCAL_PREVIEW_TROUBLESHOOTING.md`](LOCAL_PREVIEW_TROUBLESHOOTING.md) for the evidence-based recovery sequence; mobile and tablet artboards are out of scope.
 
-- React/Vite application shell.
-- Canvas, layer tree, property inspector and asset panel.
-- Project create/open/rename/duplicate.
-- SQLite persistence and project-scoped asset storage.
-- Autosave, undo/redo and revision restore.
-- Desktop/tablet/mobile viewport presets.
+## Phase 4 — Design systems and component engine (implementation complete)
 
-**Exit gate:** Create, edit, save, close and reopen a multi-screen project.
+Add typed tokens/themes, component definitions, instances, variants and portable design-system import/export. Typed tokens, modes, aliases, component definitions with editable typed properties and named variants, rendered instances, and versioned JSON import/export are implemented. See the Phase 4 exit gate in the [development backlog](DEVELOPMENT_BACKLOG.md).
 
-## Phase 3 — AI design generation and patching
+## Phase 5 — AI design generation engine
 
-- Provider-neutral model adapters.
-- PRD/brief parser and UX-flow/screen-plan schema.
-- Generate at least three related screens and alternative directions.
-- Structured, revision-aware AI patches.
-- Selection-scoped edit and change summary.
-- Validation and visual review.
+Provider-neutral adapters for OpenAI, Anthropic, and Google Gemini, brief and screenshot to editable multi-screen directions, three distinct desktop layouts, selection-scoped reviewed patches, and deterministic design-quality review are implemented. Workspace typecheck and Studio production build pass. See [`AI_GENERATION.md`](AI_GENERATION.md). A live provider smoke request remains after a key/model is available.
 
-**Exit gate:** AI can generate a coherent editable screen set and safely modify selected regions.
+## Phase 6 — Prototyping and UX engine
 
-## Phase 4 — Prototyping and code handoff
+The document stores a validated interaction graph with click/double-click/hover triggers, navigation and overlays, typed variables bound to text, and component variant actions. A sandboxed desktop iframe preview applies changes only to temporary preview state. Local UX checks report reachability, missing entry points, hidden/locked triggers, hover-only interactions, missing image descriptions, and unused variables. See [`PROTOTYPING.md`](PROTOTYPING.md). Hands-on preview review remains open.
 
-- Prototype graph, triggers, actions and state.
-- Clickable preview and responsive rendering.
-- React/CSS/token/asset export.
-- Restricted code preview and unsupported-feature reporting.
-- Local project/repository handoff.
+## Phase 7 — Code generation and developer handoff
 
-**Exit gate:** Complete idea-to-editable-design-to-prototype-to-code workflow.
+Export React and HTML/CSS with tokens and project images; show support findings and a restricted static preview. The downloadable ZIP, optional Git-ready packaging, and both render formats are implemented. Hands-on review remains; GitHub publishing is not part of the local export flow.
 
-## Later phases
+## Phase 8 — Imports, exports and interoperability
 
-- Figma/Penpot import/export.
-- Advanced vector editing and richer design tooling.
-- MCP agent operations over the shared command service.
-- GitHub branch/PR integration.
-- Real-time collaboration and hosted sync.
-- Team permissions and integrations marketplace.
+Add supported Figma/Penpot exchange, reference and asset imports, document exports and MCP integration. Project uploads now record provenance, verify raster file signatures, and treat SVG/PDF as downloadable reference-only attachments. See the Phase 8 backlog; Figma/Penpot exchange and MCP remain.
 
-These are deliberately deferred until the MVP proves its core value.
+## Phase 9 — Collaboration and AI-agent ecosystem
+
+Add comments, shared/realtime projects, revision review and scoped agent collaboration after single-user editing is dependable.
+
+## Phase 10 — Testing, optimization and release
+
+Complete unit/integration/interaction/visual coverage, security/accessibility/performance review, recovery, packaging, docs and release management.

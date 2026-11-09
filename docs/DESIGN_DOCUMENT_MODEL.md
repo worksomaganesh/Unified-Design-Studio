@@ -1,6 +1,6 @@
 # Design Document Model — conceptual schema v0
 
-**Status:** Phase 0 conceptual contract; exact TypeScript/Zod schema is a Phase 1 deliverable.
+**Status:** Phase 6 implementation baseline; schema version 2 is implemented in `packages/design-core` with a version-1 migration. Phase 4 design-system data and Phase 6 prototype data are validated document fields. Project asset binaries and provenance remain project-scoped database/filesystem records, outside document snapshots.
 
 ## 1. Purpose
 
@@ -27,14 +27,15 @@ DesignDocument
 │               ├── ComponentDefinition
 │               └── ComponentInstance
 ├── designSystem
-│   ├── tokens
-│   ├── themes
+│   ├── tokens[]
+│   ├── themes[]
+│   ├── modes[]
 │   ├── components
 │   └── variants
 ├── prototype
 │   ├── variables
 │   └── connections[]
-└── assets[]
+└── (project assets are stored separately from the document snapshot)
 ```
 
 ## 3. Node invariants
@@ -51,6 +52,10 @@ Node types in the first renderer subset:
 
 Vector paths and boolean geometry are later extensions, not a reason to overload the initial node union.
 
+## 3.1 Project asset records
+
+Asset binaries are stored under the project directory and referenced by project-scoped URLs from image nodes. SQLite records the content hash, MIME type, byte size, original filename, asset kind, and provenance JSON. Raster PNG/JPEG/WebP/GIF files are canvas images after signature validation. SVG and PDF uploads are reference-only attachments: they keep source provenance but are not rendered as image nodes. These binaries are not copied into each document revision.
+
 ## 4. Layout semantics
 
 Layout is expressed as framework-independent intent:
@@ -60,17 +65,19 @@ Layout is expressed as framework-independent intent:
 - Grid: tracks, gaps, placement and spans.
 - Sizing: fixed, fill, hug/content, min/max constraints.
 - Spacing: padding, margin/gap.
-- Responsive overrides: breakpoint-scoped property patches.
+- Desktop artboard widths: laptop, standard desktop and wide desktop presets.
 
 Do not persist Tailwind class names as the semantic layout model. Exporters may generate Tailwind or plain CSS from the same semantics.
 
+The schema stores explicit width and height for frames, images, shapes and containers. Container width/height default to 320×220 when migrating schema-v1 snapshots. Block containers position children locally; flex/grid containers place children in flow. UDS targets laptop and desktop screens; mobile and tablet artboards are out of scope.
+
 ## 5. Styles and tokens
 
-Style values can be literals or typed token references. Token types include color, number, dimension, font family, font size, line height, radius, shadow and border. Tokens support semantic aliases, themes/modes and fallback values. Component definitions declare typed properties and variant axes; instances store only explicit overrides plus a definition reference.
+Style values can be literals or typed token references. Token types include color, number, dimension, font family, font size, line height, radius, shadow and border. Tokens support semantic aliases, themes/modes and fallback values. Each mode belongs to a theme; a token can override its base value by mode. Alias targets must exist and share a type, and alias cycles are rejected. The renderer resolves text and shape color references for a selected mode. Component definitions contain one root layer, typed text/color/number/boolean properties and named variants; an instance stores its definition ID, selected named variant, and explicit property overrides. Nested component definitions and multi-axis variants are future extensions.
 
 ## 6. Prototype model
 
-A prototype is a graph of frame references and interactions. Each interaction has a trigger, action, target and optional condition. Initial actions: navigate, open/close overlay, set variable and change component variant. Prototype state is separate from editor selection/viewport state.
+A prototype graph stores typed variables, text bindings and page/layer interactions. Triggers include click, double-click and hover. Actions include navigation, opening/closing overlays, setting a variable and changing a named component variant. References are validated against pages, nodes, variables and component definitions. Prototype preview state is temporary and separate from editor selection/viewport state.
 
 ## 7. Revisions and migrations
 
@@ -82,4 +89,4 @@ Renderer maps validated nodes to DOM/CSS/SVG. Editor overlays (selection outline
 
 ## 9. Phase 1 proof
 
-Before freezing v1, implement a sample document with a frame, nested flex/grid containers, text, image, shape and component instance. Validate schema, render at desktop/mobile widths, select and resize nodes, persist/reload, and compare deterministic screenshots. Adjust schema based on the spike.
+Schema version 2 adds the design-system resource and color-token references. Version-1 snapshots migrate by adding a default theme and mode. Future fields require an explicit schema version and migration path. Desktop canvas review covers laptop and desktop artboards; mobile/tablet rendering is not a product target.
