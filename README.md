@@ -2,7 +2,7 @@
 
 An AI-native, local-first product design workspace combining UX planning, multimodal design generation, direct visual editing, reusable design systems, interactive prototypes and frontend handoff.
 
-> **Current stage:** Phase 8 is 35% complete. Raster assets now have signature checks and provenance; SVG/PDF uploads are tracked as reference-only attachments. Figma/Penpot interchange and the MCP adapter remain. Phase 7 is set aside at 95%, with hands-on output review pending.
+> **Current stage:** Phase 8 is 90% complete. DTCG/Penpot/Tokens Studio exchange, supported Penpot v3 import, Figma Variables exchange, Figma REST file import, provenance-aware assets, and bounded MCP read/write tools are implemented. Review with an eligible Figma account/file, a representative Penpot archive, and a temporary token-workflow project remains. Phase 7 is set aside at 95%, with hands-on output review pending.
 
 ## Status
 
@@ -15,7 +15,7 @@ An AI-native, local-first product design workspace combining UX planning, multim
 - Workspace shell now supports local project creation, listing, and reopening the saved starter document through the local service.
 - Canvas editor supports laptop/desktop artboards, page management, nested layer grouping, flex/grid controls, node creation and transforms, undo/redo, revision restore, design-token color links, reusable components with typed properties/variants, and versioned design-system JSON import/export; see the [development backlog](docs/DEVELOPMENT_BACKLOG.md).
 - Code handoff downloads React, static HTML/CSS, design-system tokens, project images, and an export support report in a ZIP; its current canvas can be reviewed in a script-free restricted preview. See [Code handoff](docs/CODE_HANDOFF.md).
-- Project assets record local provenance; SVG/PDF references are stored as attachments and cannot be placed into canvas image nodes. See the [Phase 8 backlog](docs/DEVELOPMENT_BACKLOG.md).
+- Phase 8 supports DTCG/Penpot/Tokens Studio exchange, supported editable Penpot v3 imports, Figma REST file conversion and Variables API reads/create-only writes, and MCP project/layer summaries plus revision-checked text and rename commands. Raster assets record provenance; SVG/PDF and native source files retain provenance and conversion notes. Figma `.fig` files remain reference-only; file API conversion limits and scopes are documented in the [interoperability guide](docs/INTEROPERABILITY.md) and [Phase 8 backlog](docs/DEVELOPMENT_BACKLOG.md).
 - AI Studio supports provider setup, brief-to-flow planning, editable screen inventories, alternative editable desktop directions, image references, reviewed selection patches, and local deterministic quality checks; see [AI generation](docs/AI_GENERATION.md).
 - Prototype Studio supports validated interactions, variables and text bindings, component variant changes, sandboxed clickable preview, and local UX/accessibility checks; see [prototyping](docs/PROTOTYPING.md).
 - Phase 5 implementation, workspace typecheck, and Studio production build are complete. A live provider smoke request remains operational verification; see the [Phase 5 backlog](docs/DEVELOPMENT_BACKLOG.md).

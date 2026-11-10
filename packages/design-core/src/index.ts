@@ -97,7 +97,7 @@ const designSystem = z.object({
     if (!themeIds.has(mode.themeId)) context.addIssue({ code: "custom", path: ["modes", index, "themeId"], message: "Mode must belong to an existing theme." });
   });
   system.tokens.forEach((token, index) => {
-    for (const modeId of Object.keys(token.modeValues)) {
+    for (const modeId of Object.keys(token.modeValues ?? {})) {
       if (!modeIds.has(modeId)) context.addIssue({ code: "custom", path: ["tokens", index, "modeValues", modeId], message: "Token override references an unknown mode." });
     }
     if (token.aliasOf) {
@@ -434,7 +434,7 @@ export function resolveDesignToken(system: DesignSystem, tokenId: string, modeId
   while (token) {
     if (visited.has(token.id)) return undefined;
     visited.add(token.id);
-    const modeValue = modeId ? token.modeValues[modeId] : undefined;
+    const modeValue = modeId && token.modeValues ? token.modeValues[modeId] : undefined;
     if (modeValue) return modeValue;
     if (token.aliasOf) { token = tokens.get(token.aliasOf); continue; }
     return token.value;

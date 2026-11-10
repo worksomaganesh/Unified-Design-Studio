@@ -1,6 +1,6 @@
 # Development roadmap
 
-**Current phase:** Phase 8 — Imports, exports and interoperability (35% complete). Provenance-aware raster-image and SVG/PDF reference imports are implemented. Figma/Penpot interchange and the narrow MCP adapter remain. Phase 7 is set aside at 95%, with hands-on output review pending; Phase 6 preview review, Phase 5 live provider smoke verification, and Phase 3 desktop visual review are also open.
+**Current phase:** Phase 8 — Imports, exports and interoperability (90% complete). DTCG/Penpot/Tokens Studio exchange, supported Penpot v3 conversion, Figma REST file import and Variables exchange, provenance-aware assets, and bounded read/write MCP tools are implemented. Review with an eligible Figma account/file, a representative Penpot archive, and a temporary token-workflow project remains. Phase 7 is set aside at 95%, with hands-on output review pending; Phase 6 preview review, Phase 5 live provider smoke verification, and Phase 3 desktop visual review are also open.
 Phase names and numbering follow the project owner's 0–10 plan. No delivery dates are committed.
 
 ## Phase 0 — Intelligence gathering and reverse engineering
@@ -37,7 +37,7 @@ Export React and HTML/CSS with tokens and project images; show support findings 
 
 ## Phase 8 — Imports, exports and interoperability
 
-Add supported Figma/Penpot exchange, reference and asset imports, document exports and MCP integration. Project uploads now record provenance, verify raster file signatures, and treat SVG/PDF as downloadable reference-only attachments. See the Phase 8 backlog; Figma/Penpot exchange and MCP remain.
+Add supported Figma/Penpot exchange, reference and asset imports, document exports and MCP integration. Project uploads record provenance, verify raster and Penpot archive signatures, and preserve SVG/PDF plus native source files. Penpot v3 imports the supported editable subset and reports unsupported content. DTCG-compatible token sets, credential-backed Figma Variables exchange, Figma REST file conversion, and bounded MCP reads plus revision-checked text/rename commands are implemented. Hands-on Figma/Penpot/token-workflow review remains; see the [Phase 8 backlog](DEVELOPMENT_BACKLOG.md).
 
 ## Phase 9 — Collaboration and AI-agent ecosystem
 

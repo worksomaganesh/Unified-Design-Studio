@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "pnpm --filter @uds/studio --filter @uds/local-server --filter @uds/ai-engine --filter @uds/design-core --filter @uds/renderer typecheck",
     "check:packages": "pnpm --filter @uds/ai-engine --filter @uds/design-core --filter @uds/renderer typecheck",
+    "test": "node server/api/node_modules/tsx/dist/cli.mjs --test tests/unit/design-core.test.ts tests/unit/token-interchange.test.ts tests/unit/renderer-codegen.test.ts tests/unit/ai-engine.test.ts",
     "dev": "pnpm --parallel --filter @uds/studio --filter @uds/local-server dev"
   },
   "devDependencies": { "typescript": "^5.8.2", "concurrently": "^9.1.2" }

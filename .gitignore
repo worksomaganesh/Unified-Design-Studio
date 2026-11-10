@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 .uds-data/
+.uds-data*/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

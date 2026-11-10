@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
 import type { AIProviderId } from "@uds/ai-engine";
 
-const environmentKeys: Record<AIProviderId, string> = {
+export type CredentialId = AIProviderId | "figma";
+
+const environmentKeys: Record<CredentialId, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   google: "GEMINI_API_KEY",
+  figma: "FIGMA_ACCESS_TOKEN",
 };
 
 const powershellCredentialScript = String.raw`
@@ -73,7 +76,7 @@ try {
 }
 `;
 
-function windowsVault(operation: "store" | "read" | "has" | "delete", provider: AIProviderId, secret?: string): Promise<{ found: boolean; secret?: string }> {
+function windowsVault(operation: "store" | "read" | "has" | "delete", provider: CredentialId, secret?: string): Promise<{ found: boolean; secret?: string }> {
   if (process.platform !== "win32") return Promise.reject(new Error("Windows Credential Manager is unavailable on this platform."));
   return new Promise((resolve, reject) => {
     const child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", powershellCredentialScript], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
@@ -94,17 +97,17 @@ function windowsVault(operation: "store" | "read" | "has" | "delete", provider: 
   });
 }
 
-export async function storeProviderCredential(provider: AIProviderId, secret: string): Promise<void> {
+export async function storeProviderCredential(provider: CredentialId, secret: string): Promise<void> {
   if (process.platform === "win32") { await windowsVault("store", provider, secret); return; }
   throw new Error(`Secure key entry is available on Windows. Configure ${environmentKeys[provider]} in the local service environment on this platform.`);
 }
 
-export async function deleteProviderCredential(provider: AIProviderId): Promise<void> {
+export async function deleteProviderCredential(provider: CredentialId): Promise<void> {
   if (process.platform === "win32") { await windowsVault("delete", provider); return; }
   throw new Error(`Remove ${environmentKeys[provider]} from the local service environment on this platform.`);
 }
 
-export async function getProviderCredential(provider: AIProviderId): Promise<string | undefined> {
+export async function getProviderCredential(provider: CredentialId): Promise<string | undefined> {
   if (process.platform === "win32") {
     try {
       const stored = await windowsVault("read", provider);
@@ -114,7 +117,7 @@ export async function getProviderCredential(provider: AIProviderId): Promise<str
   return process.env[environmentKeys[provider]] || undefined;
 }
 
-export async function hasProviderCredential(provider: AIProviderId): Promise<boolean> {
+export async function hasProviderCredential(provider: CredentialId): Promise<boolean> {
   if (process.platform === "win32") {
     try { if ((await windowsVault("has", provider)).found) return true; }
     catch { /* Check the environment fallback. */ }

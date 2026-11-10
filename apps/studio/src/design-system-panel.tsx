@@ -3,6 +3,7 @@ import "./design-system.css";
 import {
   DESIGN_TOKEN_TYPES,
   type DesignSystem,
+  type DesignDocument,
   type DesignNode,
   type DesignToken,
   type DesignTokenType,
@@ -14,14 +15,20 @@ import {
   type ComponentProperty,
   type ComponentPropertyValue,
 } from "@uds/design-core";
+import { exportDtcgTokens, importInterchangeTokens } from "@uds/design-core/token-interchange";
+import { exportFigmaVariables, importFigmaVariables } from "@uds/design-core/figma-variables";
 
 type Props = {
+  projectId: string;
+  documentRevision: number;
+  localVersion: number;
   system: DesignSystem;
   activeModeId: string;
   selectedNode?: DesignNode;
   onApplyToken: (tokenId: string) => void;
   onModeChange: (modeId: string) => void;
   onChange: (next: DesignSystem) => boolean | void;
+  onImportFigma: (pages: DesignDocument["pages"], system: DesignSystem, baseRevision: number, baseLocalVersion: number) => boolean;
   onDeleteToken: (id: string) => void;
   onCreateComponent: () => void;
   onClose: () => void;
@@ -66,7 +73,7 @@ function modeInputValue(token: DesignToken, modeId: string, defaultModeId: strin
   return designTokenCssValue(selected);
 }
 
-export function DesignSystemPanel({ system, activeModeId, selectedNode, onApplyToken, onModeChange, onChange, onDeleteToken, onCreateComponent, onClose }: Props) {
+export function DesignSystemPanel({ projectId, documentRevision, localVersion, system, activeModeId, selectedNode, onApplyToken, onModeChange, onChange, onImportFigma, onDeleteToken, onCreateComponent, onClose }: Props) {
   const [themeId, setThemeId] = useState(system.themes[0]?.id ?? "");
   const [name, setName] = useState("");
   const [type, setType] = useState<DesignTokenType>("color");
@@ -75,6 +82,12 @@ export function DesignSystemPanel({ system, activeModeId, selectedNode, onApplyT
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [componentError, setComponentError] = useState("");
+  const [transferMessage, setTransferMessage] = useState("");
+  const [figmaFileKey, setFigmaFileKey] = useState("");
+  const [figmaToken, setFigmaToken] = useState("");
+  const [figmaConnected, setFigmaConnected] = useState(false);
+  const [figmaBusy, setFigmaBusy] = useState(false);
+  const [figmaStatus, setFigmaStatus] = useState("");
   const importFile = useRef<HTMLInputElement>(null);
   const themes = system.themes.length ? system.themes : [{ id: "", name: "No theme" }];
   const modes = system.modes.filter(mode => mode.themeId === themeId);
@@ -87,6 +100,76 @@ export function DesignSystemPanel({ system, activeModeId, selectedNode, onApplyT
   useEffect(() => {
     if (modeId && modeId !== activeModeId) onModeChange(modeId);
   }, [modeId, activeModeId, onModeChange]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/integrations/figma").then(response => response.json()).then((result: { configured?: boolean }) => {
+      if (!cancelled) setFigmaConnected(Boolean(result.configured));
+    }).catch(() => { if (!cancelled) setFigmaStatus("Figma connection status is unavailable."); });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function callFigma<T>(path: string, method: "GET" | "PUT" | "DELETE" | "POST", body?: unknown): Promise<T> {
+    const response = await fetch(path, { method, ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
+    const result = await response.json().catch(() => ({})) as T & { error?: string };
+    if (!response.ok) throw new Error(result.error ?? `Figma request failed (${response.status}).`);
+    return result;
+  }
+
+  async function saveFigmaToken() {
+    if (!figmaToken.trim()) { setFigmaStatus("Enter a Figma access token first."); return; }
+    setFigmaBusy(true); setFigmaStatus("");
+    try {
+      await callFigma("/api/integrations/figma/credential", "PUT", { token: figmaToken.trim() });
+      setFigmaToken(""); setFigmaConnected(true); setFigmaStatus("Figma token saved in the local credential store.");
+    } catch (reason) { setFigmaStatus((reason as Error).message); }
+    finally { setFigmaBusy(false); }
+  }
+
+  async function removeFigmaToken() {
+    setFigmaBusy(true); setFigmaStatus("");
+    try { await callFigma("/api/integrations/figma/credential", "DELETE"); setFigmaConnected(false); setFigmaStatus("Saved Figma token removed."); }
+    catch (reason) { setFigmaStatus((reason as Error).message); }
+    finally { setFigmaBusy(false); }
+  }
+
+  async function importFigmaVariablesDirectly() {
+    if (!figmaFileKey.trim()) { setFigmaStatus("Enter the Figma file key first."); return; }
+    setFigmaBusy(true); setFigmaStatus("");
+    try {
+      const payload = await callFigma<unknown>("/api/integrations/figma/variables/read", "POST", { fileKey: figmaFileKey.trim() });
+      const imported = importFigmaVariables(payload, system);
+      if (onChange(imported.designSystem) === false) { setFigmaStatus("Import rejected because it would break an existing canvas or component token reference."); return; }
+      setFigmaStatus(imported.warnings.length ? `Imported from Figma with limits: ${imported.warnings.join(" ")}` : "Imported Figma Variables collections and modes.");
+    } catch (reason) { setFigmaStatus((reason as Error).message); }
+    finally { setFigmaBusy(false); }
+  }
+
+  async function importFigmaFile() {
+    if (!figmaFileKey.trim()) { setFigmaStatus("Enter the Figma file key first."); return; }
+    setFigmaBusy(true); setFigmaStatus("");
+    try {
+      const result = await callFigma<{ fileName: string; pages: DesignDocument["pages"]; designSystem: DesignSystem; layersImported: number; componentsImported: number; tokensImported: number; warnings: string[] }>("/api/integrations/figma/file/import", "POST", { fileKey: figmaFileKey.trim(), designSystem: system });
+      if (!onImportFigma(result.pages, result.designSystem, documentRevision, localVersion)) {
+        setFigmaStatus("The project changed while Figma was loading, or its content could not be validated. No imported pages were applied.");
+        return;
+      }
+      const summary = `Imported ${result.pages.length} page${result.pages.length === 1 ? "" : "s"}, ${result.layersImported} layer${result.layersImported === 1 ? "" : "s"}${result.componentsImported ? `, and ${result.componentsImported} component${result.componentsImported === 1 ? "" : "s"}` : ""} from ${result.fileName}${result.tokensImported ? ` with ${result.tokensImported} variables` : ""}.`;
+      setFigmaStatus(result.warnings.length ? `${summary} Limits: ${result.warnings.join(" ")}` : `${summary} Save the project to keep these changes.`);
+    } catch (reason) { setFigmaStatus((reason as Error).message); }
+    finally { setFigmaBusy(false); }
+  }
+
+  async function createFigmaVariables() {
+    if (!figmaFileKey.trim()) { setFigmaStatus("Enter the Figma file key first."); return; }
+    const confirmed = window.confirm(`This will create new variable collections and variables in Figma file ${figmaFileKey.trim()}. Existing Figma variables will not be updated or removed. Continue?`);
+    if (!confirmed) return;
+    setFigmaBusy(true); setFigmaStatus("");
+    try {
+      const result = await callFigma<{ warnings?: string[] }>("/api/integrations/figma/variables/write", "POST", { fileKey: figmaFileKey.trim(), projectId, expectedRevision: documentRevision });
+      setFigmaStatus(result.warnings?.length ? `Added variables to Figma with conversion limits: ${result.warnings.join(" ")}` : "Added variable collections and variables to Figma.");
+    } catch (reason) { setFigmaStatus((reason as Error).message); }
+    finally { setFigmaBusy(false); }
+  }
 
   function addTheme() {
     const themeName = window.prompt("Theme name")?.trim();
@@ -179,14 +262,53 @@ export function DesignSystemPanel({ system, activeModeId, selectedNode, onApplyT
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setTransferMessage("Exported the complete UDS design system file.");
+  }
+
+  function exportTokens() {
+    const result = exportDtcgTokens(system);
+    const blob = new Blob([result.json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = window.document.createElement("a");
+    link.href = url;
+    link.download = "uds-tokens-dtcg.json";
+    window.document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setTransferMessage(result.warnings.length ? `Export completed with limits: ${result.warnings.join(" ")}` : "Exported DTCG 2025.10 tokens for Penpot and compatible token tools.");
+  }
+
+  function exportFigmaTokenPayload() {
+    try {
+      const result = exportFigmaVariables(system);
+      const blob = new Blob([result.json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = "uds-figma-variables-request.json";
+      window.document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setTransferMessage(result.warnings.length ? `Figma payload exported with limits: ${result.warnings.join(" ")}` : "Exported a Figma Variables API request payload. Review it before sending it to a Figma file.");
+    } catch (reason) { setComponentError((reason as Error).message); }
   }
 
   async function importSystem(file?: File) {
     if (!file) return;
     try {
-      const imported = parseDesignSystemImport(await file.text());
-      if (onChange(imported) === false) { setComponentError("Import rejected because it would break an existing layer reference."); return; }
+      if (file.size > 5 * 1024 * 1024) throw new Error("Token JSON files are limited to 5 MB.");
+      const contents = await file.text();
+      const parsed: unknown = JSON.parse(contents);
+      const isUdsFile = Boolean(parsed && typeof parsed === "object" && "format" in parsed);
+      const isFigmaVariables = Boolean(parsed && typeof parsed === "object" && "meta" in parsed && parsed.meta && typeof parsed.meta === "object" && "variables" in parsed.meta);
+      const imported = isUdsFile
+        ? { designSystem: parseDesignSystemImport(parsed), warnings: [] as string[] }
+        : isFigmaVariables ? importFigmaVariables(parsed, system) : importInterchangeTokens(parsed, system);
+      if (onChange(imported.designSystem) === false) { setComponentError("Import rejected because it would break an existing canvas or component token reference. Keep referenced tokens in the imported file, then retry."); return; }
       setError(""); setComponentError("");
+      setTransferMessage(imported.warnings.length ? `Imported supported tokens with limits: ${imported.warnings.join(" ")}` : isUdsFile ? "Imported the UDS design system." : isFigmaVariables ? "Imported Figma Variables collections and modes. Figma aliases were resolved to their current values." : "Imported token sets and themes. External alias references were resolved to their current values.");
     } catch (reason) { setComponentError((reason as Error).message); }
   }
 
@@ -216,7 +338,9 @@ export function DesignSystemPanel({ system, activeModeId, selectedNode, onApplyT
           </div>)}
         </article>)}{!system.components.length && <p className="empty-token-list">Select a canvas layer and create a reusable component.</p>}
       </section>
-      <section className="design-system-transfer"><h3>Design-system file</h3><div><button onClick={exportSystem}>Export JSON</button><button onClick={() => importFile.current?.click()}>Import JSON</button><input ref={importFile} type="file" accept="application/json,.json" hidden onChange={event => { void importSystem(event.target.files?.[0]); event.currentTarget.value = ""; }}/></div><p>Import replaces tokens and components. Existing canvas references must remain valid.</p></section>
+      <section className="design-system-transfer"><h3>Interchange</h3><div><button onClick={exportSystem}>Export UDS</button><button onClick={exportTokens}>Export DTCG</button><button onClick={exportFigmaTokenPayload}>Export Figma API JSON</button><button onClick={() => importFile.current?.click()}>Import JSON</button><input ref={importFile} type="file" accept="application/json,.json" hidden onChange={event => { void importSystem(event.target.files?.[0]); event.currentTarget.value = ""; }}/></div><p>UDS files include components. Token import accepts DTCG, Penpot/Tokens Studio sets, and Figma Variables API JSON. Import replaces tokens but keeps components; canvas references must remain valid.</p>{transferMessage && <p className="design-system-transfer-message" role="status">{transferMessage}</p>}
+      <details className="figma-variables-connection"><summary>Figma file and Variables</summary><p>File import needs file access and a token with file_content:read. Variable values and bindings also need an eligible Enterprise full seat and file_variables:read. Variables can be sent to Figma with file_variables:write. The token stays in the local credential store.</p><label>Figma file key<input value={figmaFileKey} onChange={event => setFigmaFileKey(event.target.value)} maxLength={128} placeholder="File key from the Figma URL"/></label>{!figmaConnected && <label>Figma access token<input type="password" autoComplete="new-password" value={figmaToken} onChange={event => setFigmaToken(event.target.value)} maxLength={512} placeholder="Paste a Figma token"/></label>}<div><button disabled={figmaBusy || !figmaToken.trim()} onClick={() => void saveFigmaToken()}>{figmaBusy ? "Working…" : "Save token"}</button><button disabled={figmaBusy || !figmaConnected} onClick={() => void importFigmaFile()}>{figmaBusy ? "Working…" : "Import Figma file"}</button><button disabled={figmaBusy || !figmaConnected} onClick={() => void importFigmaVariablesDirectly()}>Import variables only</button><button disabled={figmaBusy || !figmaConnected} onClick={() => void createFigmaVariables()}>Create variables in Figma</button>{figmaConnected && <button disabled={figmaBusy} onClick={() => void removeFigmaToken()}>Remove token</button>}</div>{figmaStatus && <p className="design-system-transfer-message" role="status">{figmaStatus}</p>}</details>
+      </section>
       {(error || componentError) && <p className="design-system-error" role="alert">{error || componentError}</p>}
       <footer className="design-system-footer">Values and references are validated before they are saved to the design document.</footer>
     </section>

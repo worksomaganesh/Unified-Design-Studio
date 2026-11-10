@@ -85,11 +85,18 @@ This backlog translates the product architecture into independently reviewable s
 
 ## Phase 8 — Imports, exports and interoperability
 
-- [ ] Add supported Figma/Penpot interoperability and reference imports.
+- [x] Add DTCG 2025.10 token import/export, including Penpot and Tokens Studio token-set/theme JSON, with explicit conversion limits.
+- [x] Add file-based Figma Variables API response import and create-payload export for supported token types, with conversion warnings.
+- [x] Add credential-backed Figma Variables API read and create-only write sync, with revision checks, local credential storage, and conversion warnings.
+- [x] Preserve Figma `.fig` and Penpot `.penpot` source files as reference-only attachments with provenance and a conversion report.
+- [x] Import the supported editable subset of Penpot v3 exports as UDS pages/layers, color tokens, and basic component definitions while preserving source files and reporting losses.
+- [x] Import Figma file content through `GET /v1/files/:key` as editable UDS pages, supported layers, local component definitions/instances, and bound color tokens when Variables access is available; retain `.fig` uploads as downloadable references.
 - [x] Add raster-image placement plus reference-only SVG/PDF imports with signature checks and explicit local-upload provenance.
-- [ ] Add narrow MCP adapter over validated application commands.
+- [x] Add read-only MCP tools for project summaries, document/page summaries, and selected saved-layer summaries.
+- [x] Add narrowly scoped MCP write tools that call revision-checked application commands and expose host-visible mutation hints.
+- [ ] Review Figma file/Variables import with an eligible account and representative file, inspect a representative Penpot v3 archive, and complete live token-workflow review in a temporary project.
 
-**Phase 8 progress:** 35% complete. Project assets now distinguish canvas-safe raster images from reference-only SVG/PDF attachments, verify uploaded file signatures, and record provenance. Figma/Penpot interchange and the narrow MCP adapter remain. SVG/PDF import is intentionally reference-only; converting them into editable canvas nodes remains future work.
+**Phase 8 progress:** 90% complete; 10% remains for hands-on interoperability review. DTCG and Figma Variables exchange cover supported color, numeric, string/font-family values, themes, and modes; Figma aliases resolve to current values and API payloads report unit loss. Credential-backed Figma reads and create-only writes use revision checks and Windows Credential Manager. Figma REST file import converts supported pages, frames, auto-layout containers, groups, text, basic shapes, local components/instances, and variable-bound colors; `.fig` archives remain downloadable references. Penpot v3 imports the supported page/layer/token/basic-component subset, keeps the source archive, and reports skipped features. MCP has bounded project/layer reads and revision-checked text-edit and rename commands; Antigravity's read-only `list_projects` tool and REA capture of the running Studio home screen have been verified. Remaining review needs an eligible Figma account/file and a representative Penpot archive; the app has no project data to use for the live token workflow.
 
 ## Phase 9 — Collaboration and AI-agent ecosystem
 

@@ -1,10 +1,10 @@
 # Internal API contracts — v0 baseline
 
-**Status:** Phase 1 contract baseline. Project/document APIs, Phase 5 AI routes, Phase 7 code export routes, and provenance-aware asset uploads are implemented as described below. Figma/Penpot interchange and MCP adapter commands remain planned.
+**Status:** Project/document APIs, Phase 5 AI routes, Phase 7 code export routes, provenance-aware asset uploads, DTCG and Figma Variables adapters, Figma REST file import, supported Penpot v3 import, and bounded MCP read/write tools are implemented as described below. Live Figma and representative Penpot verification remain open.
 
 ## 1. Principles
 
-- Internal service commands are the single mutation boundary for UI, AI and later MCP clients.
+- Internal service commands are the single mutation boundary for UI, AI, and MCP clients.
 - Validate all input/output at runtime.
 - Scope every operation to an authorized local project/document.
 - Use revision preconditions for mutations.
@@ -24,7 +24,7 @@
 | Generation | generate direction, generate screen set, revise selection |
 | Prototype | configure document-stored interactions, variables/bindings and component-state actions; run isolated preview |
 | Export | React/CSS, tokens, assets, image/SVG |
-| Integrations | later Figma/Penpot/GitHub/MCP adapters |
+| Integrations | DTCG/Penpot/Tokens Studio exchange; credential-backed Figma Variables reads and create-only writes; Figma REST file import; supported Penpot v3 import; bounded MCP summaries and revision-checked text/rename commands; live external-file verification remains |
 
 ## 3. AI patch envelope
 
@@ -92,9 +92,20 @@ Export reads the latest persisted document revision. The Studio saves pending ed
 
 ## 7. Asset import and provenance
 
-`POST /api/projects/:id/assets` accepts PNG, JPEG, WebP, GIF, SVG, and PDF uploads up to 20 MB. SVG is capped at 5 MB. Raster signatures are checked before files become canvas images; SVG and PDF are stored as reference-only attachments and are served with download disposition and `nosniff`. `GET /api/projects/:id/assets` returns the asset kind and provenance record, including source, original name, import time, hash, and intended usage. Existing assets are migrated as legacy local uploads. See migration `003_asset_provenance.sql`.
+`POST /api/projects/:id/assets` accepts PNG, JPEG, WebP, GIF, SVG, PDF, Figma `.fig`, and Penpot `.penpot` files up to 20 MB. SVG is capped at 5 MB. Raster signatures are checked before files become canvas images; SVG, PDF, Figma `.fig`, and Penpot `.penpot` sources are retained as reference attachments with conversion metadata. Supported Penpot v3 archives also append converted pages to the project document. `GET /api/projects/:id/assets` returns the asset kind and provenance record, including source, original name, import time, hash, and intended usage. Existing assets are migrated as legacy local uploads. See migration `003_asset_provenance.sql` and [`INTEROPERABILITY.md`](INTEROPERABILITY.md).
 
-## 8. Error categories
+## 8. Figma import and Variables routes
+
+| Route | Purpose |
+|---|---|
+| `PUT/DELETE /api/integrations/figma/credential` | Store/remove the Figma access token in Windows Credential Manager. |
+| `POST /api/integrations/figma/file/import` | Read one Figma file via the REST API, optionally read local Variables, and return converted pages/design tokens for the editor's local draft. Requires `file_content:read`; variable binding import also requires `file_variables:read`. |
+| `POST /api/integrations/figma/variables/read` | Read local Variables collections, modes, and values. |
+| `POST /api/integrations/figma/variables/write` | Create new Variables collections and values after an explicit UI confirmation and revision check; existing remote Variables are not updated or deleted. |
+
+File import caps the Figma document response at 20 MB and Variables JSON at 5 MB. The editor checks its local change version before applying a returned import, then persists through its normal Save action. Figma file reads are read-only; `.fig` archive uploads remain downloadable references. See [`INTEROPERABILITY.md`](INTEROPERABILITY.md) for conversion losses and account requirements.
+
+## 9. Error categories
 
 - `VALIDATION_ERROR`
 - `NOT_FOUND`
@@ -106,10 +117,12 @@ Export reads the latest persisted document revision. The Studio saves pending ed
 - `EXPORT_ERROR`
 - `INTERNAL_ERROR`
 
-## 9. Planned async jobs
+## 10. Planned async jobs
 
 Long-running generation, import, screenshot, preview and export may later return a job ID and status stream. Current Phase 5 AI requests are synchronous and non-streaming. Any future job system should persist summaries and avoid logging secrets or full sensitive prompts by default.
 
-## 10. MCP boundary
+## 11. MCP boundary
 
-MCP is a thin adapter over the same internal command service. Initial read-only tools may expose project summary, document summary, selected nodes and design-system metadata. Write tools are added only after mutation validation and permission checks are stable. No arbitrary shell, filesystem or unrestricted network tool is exposed.
+`pnpm --filter @uds/local-server mcp` starts the local `stdio` server. The Studio must have created the database first. `UDS_DATA_DIR` can point both processes at the same data folder. Read tools are `list_projects`, `get_project_summary`, and `get_node_summaries`. Optional writes are `set_layer_text` and `rename_layer`. Inputs are schema-validated, project IDs are UUIDs, output is capped, and text is truncated. It does not return local file paths, binary assets, credentials, full document snapshots, or arbitrary prototype payloads.
+
+Both write tools call the schema-validated, revision-checked document save command used by the Studio. They affect only one existing layer's text or name, create a revision, and reject stale revisions. Their descriptions and annotations mark them as mutating; the host should show the change and obtain user approval before invocation. No arbitrary shell, filesystem, or unrestricted network tool is exposed. See [`INTEROPERABILITY.md`](INTEROPERABILITY.md) for DTCG/Penpot/Tokens Studio exchange limits and local Antigravity configuration guidance.

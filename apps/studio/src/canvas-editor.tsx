@@ -223,6 +223,16 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
     return true;
   }
 
+  function applyFigmaImport(pages: DesignDocument["pages"], designSystem: DesignSystem, baseRevision: number, baseLocalVersion: number): boolean {
+    if (document.revision !== baseRevision || changeVersion.current !== baseLocalVersion || !pages.length) return false;
+    const candidate = DesignDocumentSchema.safeParse({ ...document, pages: [...document.pages, ...pages], designSystem });
+    if (!candidate.success) { setStatus(`Figma import rejected: ${candidate.error.issues[0]?.message ?? "invalid document"}`); return false; }
+    commit(candidate.data);
+    setActivePageId(pages[0].id);
+    setSelectedIds([]);
+    return true;
+  }
+
   function applyAIProposal(_proposal: PatchProposal, operations: AIPatchOperation[], baseRevision: number, baseLocalVersion: number): boolean {
     if (document.revision !== baseRevision || changeVersion.current !== baseLocalVersion) return false;
     if (operations.some(operation => !findNode(nodes, operation.nodeId))) return false;
@@ -442,7 +452,7 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   }
 
   return <div className="editor-shell">
-    {designSystemOpen && <DesignSystemPanel system={document.designSystem} activeModeId={modeId} selectedNode={selectedNode} onApplyToken={tokenId => selectedNode && applyColorToken(selectedNode, tokenId)} onModeChange={setActiveModeId} onChange={updateDesignSystem} onDeleteToken={deleteDesignToken} onCreateComponent={createComponentFromSelection} onClose={() => setDesignSystemOpen(false)}/>}
+    {designSystemOpen && <DesignSystemPanel projectId={projectId} documentRevision={document.revision} localVersion={changeVersion.current} system={document.designSystem} activeModeId={modeId} selectedNode={selectedNode} onApplyToken={tokenId => selectedNode && applyColorToken(selectedNode, tokenId)} onModeChange={setActiveModeId} onChange={updateDesignSystem} onImportFigma={applyFigmaImport} onDeleteToken={deleteDesignToken} onCreateComponent={createComponentFromSelection} onClose={() => setDesignSystemOpen(false)}/>}
     {aiStudioOpen && <AIStudioPanel projectId={projectId} document={document} pageId={page.id} selectedNodes={selectedNodes} assets={assets} localVersion={changeVersion.current} onApplyDirection={applyGeneratedPages} onApplyPatch={applyAIProposal} onClose={() => setAiStudioOpen(false)}/>}
     {prototypeOpen && <PrototypePanel document={document} pageId={page.id} selectedNode={selectedNode} onChange={updatePrototype} onPreview={() => { setPrototypeOpen(false); setPrototypePreviewOpen(true); }} onClose={() => setPrototypeOpen(false)}/>}
     {prototypePreviewOpen && <PrototypePreview document={document} projectId={projectId} assets={assets} startPageId={page.id} onClose={() => setPrototypePreviewOpen(false)}/>}

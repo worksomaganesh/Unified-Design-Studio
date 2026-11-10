@@ -2,12 +2,14 @@ import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createDefaultDesignSystem, DesignDocumentSchema, migrateDocument, type DesignDocument } from "@uds/design-core";
 import { buildCodeExportFiles, collectImageSources, inspectExportSupport } from "@uds/renderer";
 import { registerAIService } from "./ai-service.js";
+import { DocumentCommandError, saveDocumentRevision } from "./document-commands.js";
+import { convertPenpotV3Archive } from "./penpot-import.js";
 import { createZip } from "./zip.js";
 
 const dataRoot = resolve(process.env.UDS_DATA_DIR ?? join(process.env.LOCALAPPDATA ?? process.env.HOME ?? process.cwd(), "UnifiedDesignStudio"));
@@ -71,21 +73,16 @@ app.put<{ Params: { id: string }; Body: unknown }>("/api/projects/:id/document",
   if (!project) return reply.code(404).send({ error: "Project not found." });
   const parsed = DesignDocumentSchema.safeParse(request.body);
   if (!parsed.success) return reply.code(400).send({ error: "Document did not match the design schema.", issues: parsed.error.issues.map(issue => ({ path: issue.path.join("."), message: issue.message })) });
-  const document = parsed.data;
-  const owner = db.prepare("SELECT project_id FROM documents WHERE id = ?").get(document.documentId) as { project_id: string } | undefined;
-  if (!owner || owner.project_id !== request.params.id) return reply.code(404).send({ error: "Document does not belong to this project." });
-  db.exec("BEGIN IMMEDIATE");
   try {
-    const current = db.prepare("SELECT current_revision FROM documents WHERE id = ? AND project_id = ?").get(document.documentId, request.params.id) as { current_revision: number };
-    if (document.revision !== current.current_revision) { db.exec("ROLLBACK"); return reply.code(409).send({ error: "Document revision conflict. Reload before saving." }); }
-    const now = new Date().toISOString();
-    const next = { ...document, revision: current.current_revision + 1, metadata: { ...document.metadata, updatedAt: now } };
-    db.prepare("INSERT INTO document_revisions (document_id, revision, schema_version, snapshot_json, created_at, summary) VALUES (?, ?, ?, ?, ?, ?)").run(document.documentId, next.revision, next.schemaVersion, JSON.stringify(next), now, "Saved from canvas editor");
-    db.prepare("UPDATE documents SET schema_version = ?, current_revision = ?, updated_at = ? WHERE id = ? AND current_revision = ?").run(next.schemaVersion, next.revision, now, document.documentId, current.current_revision);
-    db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now, request.params.id);
-    db.exec("COMMIT");
-    return next;
-  } catch { db.exec("ROLLBACK"); return reply.code(500).send({ error: "Could not save document revision." }); }
+    return saveDocumentRevision(db, request.params.id, parsed.data, parsed.data.revision, "Saved from canvas editor");
+  } catch (error) {
+    if (error instanceof DocumentCommandError) {
+      if (error.code === "revision_conflict") return reply.code(409).send({ error: error.message, currentRevision: error.currentRevision });
+      if (error.code === "not_found") return reply.code(404).send({ error: error.message });
+      if (error.code === "invalid_document") return reply.code(400).send({ error: error.message });
+    }
+    return reply.code(500).send({ error: "Could not save document revision." });
+  }
 });
 app.get<{ Params: { id: string } }>("/api/projects/:id/revisions", async (request, reply) => {
   if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
@@ -161,13 +158,13 @@ app.get<{ Params: { id: string } }>("/api/projects/:id/assets", async (request, 
 app.get<{ Params: { id: string; assetId: string } }>("/api/projects/:id/assets/:assetId/content", async (request, reply) => {
   const project = projectRootFor(request.params.id);
   if (!project) return reply.code(404).send({ error: "Project not found." });
-  const asset = db.prepare("SELECT relative_path, mime_type FROM assets WHERE id = ? AND project_id = ?").get(request.params.assetId, request.params.id) as { relative_path: string; mime_type: string } | undefined;
+  const asset = db.prepare("SELECT relative_path, mime_type, kind FROM assets WHERE id = ? AND project_id = ?").get(request.params.assetId, request.params.id) as { relative_path: string; mime_type: string; kind: string } | undefined;
   if (!asset) return reply.code(404).send({ error: "Asset not found." });
   const filePath = resolve(project.root_path, asset.relative_path);
   if (!filePath.startsWith(resolve(project.root_path) + sep) || !existsSync(filePath)) return reply.code(404).send({ error: "Asset file is unavailable." });
-  const referenceOnly = referenceAssets.has(asset.mime_type);
+  const referenceOnly = asset.kind === "reference";
   return reply.header("content-type", referenceOnly ? "application/octet-stream" : asset.mime_type)
-    .header("content-disposition", `${referenceOnly ? "attachment" : "inline"}; filename="${request.params.assetId}${referenceAssets.get(asset.mime_type) ?? allowedImages.get(asset.mime_type) ?? ".bin"}"`)
+    .header("content-disposition", `${referenceOnly ? "attachment" : "inline"}; filename="${request.params.assetId}${referenceOnly ? extname(asset.relative_path) : allowedImages.get(asset.mime_type) ?? ".bin"}"`)
     .header("x-content-type-options", "nosniff").header("cache-control", "private, max-age=3600").send(readFileSync(filePath));
 });
 app.post<{ Params: { id: string } }>("/api/projects/:id/assets", async (request, reply) => {
@@ -175,14 +172,36 @@ app.post<{ Params: { id: string } }>("/api/projects/:id/assets", async (request,
   if (!project) return reply.code(404).send({ error: "Project not found." });
   const part = await request.file();
   if (!part) return reply.code(400).send({ error: "Choose an image file to upload." });
+  const originalName = part.filename?.slice(0, 255) || "uploaded-asset";
   const imageSuffix = allowedImages.get(part.mimetype);
-  const referenceSuffix = referenceAssets.get(part.mimetype);
+  const penpotSource = /\.penpot$/i.test(originalName) && ["application/zip", "application/x-zip-compressed", "application/octet-stream", "application/vnd.penpot+zip"].includes(part.mimetype);
+  const figmaSource = /\.fig$/i.test(originalName) && ["application/octet-stream", "application/zip", "application/x-zip-compressed", "application/vnd.figma"].includes(part.mimetype);
+  const nativeReferenceSuffix = penpotSource ? ".penpot" : figmaSource ? ".fig" : undefined;
+  const referenceSuffix = referenceAssets.get(part.mimetype) ?? nativeReferenceSuffix;
   const suffix = imageSuffix ?? referenceSuffix;
-  if (!suffix) { await part.toBuffer(); return reply.code(415).send({ error: "Supported assets are PNG, JPEG, WebP, GIF, SVG, and PDF." }); }
+  if (!suffix) { await part.toBuffer(); return reply.code(415).send({ error: "Supported assets are PNG, JPEG, WebP, GIF, SVG, PDF, Figma .fig, and Penpot .penpot." }); }
   const bytes = await part.toBuffer();
   if (bytes.length > 20 * 1024 * 1024) return reply.code(413).send({ error: "Asset exceeds the 20 MB limit." });
   if (part.mimetype === "image/svg+xml" && bytes.length > 5 * 1024 * 1024) return reply.code(413).send({ error: "SVG reference files are limited to 5 MB." });
-  if (!matchesAssetSignature(part.mimetype, bytes)) return reply.code(415).send({ error: "File contents do not match the selected asset type." });
+  const penpotZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && [[0x03, 0x04], [0x05, 0x06], [0x07, 0x08]].some(([a, b]) => bytes[2] === a && bytes[3] === b);
+  if (penpotSource && !penpotZip) return reply.code(415).send({ error: "The Penpot reference must be a ZIP-based .penpot file." });
+  if (!nativeReferenceSuffix && !matchesAssetSignature(part.mimetype, bytes)) return reply.code(415).send({ error: "File contents do not match the selected asset type." });
+  let penpotImport: ReturnType<typeof convertPenpotV3Archive> | undefined;
+  let importedDocument: DesignDocument | undefined;
+  let conversionFailure: string | undefined;
+  if (penpotSource) {
+    const current = currentProjectDocument(request.params.id);
+    if (!current) return reply.code(409).send({ error: "This project has no valid design document to receive imported pages." });
+    try {
+      penpotImport = convertPenpotV3Archive(bytes, current.designSystem);
+      const parsed = DesignDocumentSchema.safeParse({ ...current, pages: [...current.pages, ...penpotImport.pages], designSystem: penpotImport.designSystem });
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "The imported pages are not valid UDS content.");
+      importedDocument = parsed.data;
+    } catch (error) {
+      penpotImport = undefined;
+      conversionFailure = (error as Error).message.slice(0, 240);
+    }
+  }
   const id = randomUUID();
   const relativePath = `assets/${id}${suffix}`;
   const target = resolve(project.root_path, relativePath);
@@ -190,12 +209,31 @@ app.post<{ Params: { id: string } }>("/api/projects/:id/assets", async (request,
   writeFileSync(target, bytes, { flag: "wx" });
   const createdAt = new Date().toISOString();
   const digest = createHash("sha256").update(bytes).digest("hex");
-  const originalName = part.filename?.slice(0, 255) || relativePath;
   const kind = imageSuffix ? "image" : "reference";
-  const provenance = JSON.stringify({ source: "local-upload", originalName, importedAt: createdAt, sha256: digest, usage: kind === "image" ? "canvas-image" : "reference-only" });
+  const conversionReport = nativeReferenceSuffix ? {
+    format: nativeReferenceSuffix === ".fig" ? "figma-fig" : "penpot-archive",
+    status: penpotImport ? "converted-with-limits" : "reference-only",
+    sourcePreserved: true,
+    pagesImported: penpotImport?.pages.length ?? 0,
+    layersImported: penpotImport?.layersImported ?? 0,
+    tokensImported: penpotImport?.tokensImported ?? 0,
+    componentsImported: penpotImport?.componentsImported ?? 0,
+    notes: penpotImport?.warnings ?? [conversionFailure ?? "Figma .fig conversion requires the Figma file API; the source is preserved as a downloadable reference."],
+  } : undefined;
+  const provenance = JSON.stringify({ source: "local-upload", originalName, importedAt: createdAt, sha256: digest, usage: kind === "image" ? "canvas-image" : penpotImport ? "converted-and-reference" : "reference-only", ...(conversionReport ? { conversionReport } : {}) });
   try { db.prepare("INSERT INTO assets (id, project_id, relative_path, sha256, mime_type, byte_size, created_at, original_name, kind, provenance_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, request.params.id, relativePath, digest, part.mimetype, bytes.length, createdAt, originalName, kind, provenance); }
   catch { unlinkSync(target); return reply.code(409).send({ error: "This image is already present in the project, or could not be indexed." }); }
-  return reply.code(201).send({ id, name: originalName, mimeType: part.mimetype, size: bytes.length, createdAt, kind, provenance: JSON.parse(provenance) });
+  let savedDocument: DesignDocument | undefined;
+  if (importedDocument) {
+    try { savedDocument = saveDocumentRevision(db, request.params.id, importedDocument, importedDocument.revision, `Imported Penpot file: ${originalName}`); }
+    catch (error) {
+      db.prepare("DELETE FROM assets WHERE id = ? AND project_id = ?").run(id, request.params.id);
+      unlinkSync(target);
+      if (error instanceof DocumentCommandError && error.code === "revision_conflict") return reply.code(409).send({ error: "The project changed during import. Reopen the project and retry the Penpot import." });
+      return reply.code(400).send({ error: (error as Error).message || "Penpot conversion could not be saved." });
+    }
+  }
+  return reply.code(201).send({ id, name: originalName, mimeType: part.mimetype, size: bytes.length, createdAt, kind, provenance: JSON.parse(provenance), ...(savedDocument ? { document: savedDocument } : {}) });
 });
 app.delete<{ Params: { id: string; assetId: string } }>("/api/projects/:id/assets/:assetId", async (request, reply) => {
   const project = projectRootFor(request.params.id);

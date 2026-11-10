@@ -3,7 +3,8 @@ import { resolve, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { DesignDocumentSchema, type DesignDocument, type DesignNode } from "@uds/design-core";
+import { DesignDocumentSchema, DesignSystemSchema, type DesignDocument, type DesignNode } from "@uds/design-core";
+import { exportFigmaVariables } from "@uds/design-core/figma-variables";
 import {
   AIProviderIdSchema,
   FlowPlanSchema,
@@ -18,6 +19,7 @@ import {
   type ProviderImage,
 } from "@uds/ai-engine";
 import { providerAdapters, providerDefaultModel } from "./ai-providers.js";
+import { convertFigmaFileResponse } from "./figma-import.js";
 import { deleteProviderCredential, getProviderCredential, hasProviderCredential, storeProviderCredential } from "./secure-credentials.js";
 
 type Database = DatabaseSync;
@@ -27,6 +29,11 @@ type AIRequest = { document: unknown; prompt?: string; model?: string; screenCou
 const modelId = z.string().trim().min(1).max(160).regex(/^[\w.:-]+$/);
 const promptText = z.string().trim().min(3).max(10_000);
 const credentialBody = z.object({ apiKey: z.string().trim().min(8).max(512) });
+const figmaCredentialBody = z.object({ token: z.string().trim().min(8).max(512) });
+const figmaFileKey = z.string().trim().min(4).max(128).regex(/^[\w-]+$/);
+const figmaReadBody = z.object({ fileKey: figmaFileKey });
+const figmaFileImportBody = z.object({ fileKey: figmaFileKey, designSystem: z.unknown() });
+const figmaWriteBody = z.object({ fileKey: figmaFileKey, projectId: z.string().uuid(), expectedRevision: z.number().int().min(0) });
 const providerBody = z.object({ provider: z.union([AIProviderIdSchema, z.literal("none")]) });
 const planBody = z.object({ document: z.unknown(), prompt: promptText, model: modelId.optional(), screenCount: z.number().int().min(2).max(8).default(3), referenceAssetIds: z.array(z.string().min(1)).max(3).default([]) });
 const generateBody = z.object({ document: z.unknown(), prompt: promptText, model: modelId.optional(), plan: FlowPlanSchema, directionCount: z.number().int().min(2).max(3).default(2), referenceAssetIds: z.array(z.string().min(1)).max(3).default([]) });
@@ -61,6 +68,30 @@ function extractJson(text: string): unknown {
   const clean = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try { return JSON.parse(clean); }
   catch { throw new Error("The provider response was not valid JSON. Try again with a shorter or clearer brief."); }
+}
+
+async function readBoundedResponse(response: Response, maxBytes: number): Promise<Buffer> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > maxBytes) throw new Error("API_RESPONSE_TOO_LARGE");
+    return bytes;
+  }
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error("API_RESPONSE_TOO_LARGE");
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally { reader.releaseLock(); }
+  return Buffer.concat(chunks, total);
 }
 
 function findNodes(nodes: DesignNode[], visit: (node: DesignNode) => void): void {
@@ -139,6 +170,149 @@ export function registerAIService(app: FastifyInstance, db: Database, projectRoo
     try { await deleteProviderCredential(provider.data); }
     catch (error) { return reply.code(501).send({ error: (error as Error).message }); }
     return { configured: await hasProviderCredential(provider.data), provider: provider.data };
+  });
+
+  app.get("/api/integrations/figma", async () => ({
+    configured: await hasProviderCredential("figma"),
+    credentialStore: process.platform === "win32" ? "windows-credential-manager" : "environment",
+  }));
+
+  app.put<{ Body: unknown }>("/api/integrations/figma/credential", async (request, reply) => {
+    if (rejectCrossSite(request, reply)) return;
+    const body = figmaCredentialBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Enter a valid Figma access token." });
+    try { await storeProviderCredential("figma", body.data.token); }
+    catch (error) { return reply.code(501).send({ error: (error as Error).message }); }
+    return { configured: true, credentialStore: process.platform === "win32" ? "windows-credential-manager" : "environment" };
+  });
+
+  app.delete("/api/integrations/figma/credential", async (request, reply) => {
+    if (rejectCrossSite(request, reply)) return;
+    try { await deleteProviderCredential("figma"); }
+    catch (error) { return reply.code(501).send({ error: (error as Error).message }); }
+    return { configured: await hasProviderCredential("figma") };
+  });
+
+  async function figmaRequest(fileKey: string, method: "GET" | "POST", body?: string): Promise<Response> {
+    const token = await getProviderCredential("figma");
+    if (!token) throw new Error("Save a Figma access token before using the Variables API.");
+    return fetch(`https://api.figma.com/v1/files/${encodeURIComponent(fileKey)}/variables/${method === "GET" ? "local" : ""}`.replace(/\/$/, ""), {
+      method,
+      redirect: "error",
+      signal: AbortSignal.timeout(20_000),
+      headers: { "X-Figma-Token": token, accept: "application/json", ...(body ? { "content-type": "application/json" } : {}) },
+      ...(body ? { body } : {}),
+    });
+  }
+
+  app.post<{ Body: unknown }>("/api/integrations/figma/variables/read", async (request, reply) => {
+    if (rejectCrossSite(request, reply)) return;
+    const body = figmaReadBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Enter a valid Figma file key." });
+    try {
+      const response = await figmaRequest(body.data.fileKey, "GET");
+      if (!response.ok) return reply.code(response.status === 401 || response.status === 403 || response.status === 404 ? response.status : 502)
+        .send({ error: response.status === 403 ? "Figma denied access. Check Enterprise access, file permissions, and the file_variables:read scope." : response.status === 401 ? "Figma rejected the saved access token." : response.status === 404 ? "Figma file not found." : "Figma Variables could not be read." });
+      const contentLength = Number(response.headers.get("content-length") ?? 0);
+      if (contentLength > 5 * 1024 * 1024) return reply.code(413).send({ error: "Figma Variables response exceeds the 5 MB import limit." });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length > 5 * 1024 * 1024) return reply.code(413).send({ error: "Figma Variables response exceeds the 5 MB import limit." });
+      let payload: unknown;
+      try { payload = JSON.parse(bytes.toString("utf8")) as unknown; }
+      catch { return reply.code(502).send({ error: "Figma returned an invalid Variables response." }); }
+      if (!payload || typeof payload !== "object" || !("meta" in payload)) return reply.code(502).send({ error: "Figma response did not include local Variables metadata." });
+      return payload;
+    } catch (error) {
+      if ((error as Error).message.startsWith("Save a Figma")) return reply.code(409).send({ error: (error as Error).message });
+      return reply.code(502).send({ error: "Could not reach the Figma Variables API." });
+    }
+  });
+
+  app.post<{ Body: unknown }>("/api/integrations/figma/file/import", { bodyLimit: 6 * 1024 * 1024 }, async (request, reply) => {
+    if (rejectCrossSite(request, reply)) return;
+    const body = figmaFileImportBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Enter a valid Figma file key and current design system." });
+    const existing = DesignSystemSchema.safeParse(body.data.designSystem);
+    if (!existing.success) return reply.code(400).send({ error: "The current design system is invalid and cannot receive a Figma import." });
+    const token = await getProviderCredential("figma");
+    if (!token) return reply.code(409).send({ error: "Save a Figma access token before importing a file." });
+
+    try {
+      const response = await fetch(`https://api.figma.com/v1/files/${encodeURIComponent(body.data.fileKey)}`, {
+        method: "GET",
+        redirect: "error",
+        signal: AbortSignal.timeout(30_000),
+        headers: { "X-Figma-Token": token, accept: "application/json" },
+      });
+      if (!response.ok) return reply.code(response.status === 401 || response.status === 403 || response.status === 404 ? response.status : 502)
+        .send({ error: response.status === 403 ? "Figma denied file access. Check file permissions and the file_content:read scope." : response.status === 401 ? "Figma rejected the saved access token." : response.status === 404 ? "Figma file not found." : "Figma file content could not be read." });
+      const contentLength = Number(response.headers.get("content-length") ?? 0);
+      if (contentLength > 20 * 1024 * 1024) return reply.code(413).send({ error: "Figma file JSON exceeds the 20 MB import limit." });
+      const fileBytes = await readBoundedResponse(response, 20 * 1024 * 1024);
+      let fileResponse: unknown;
+      try { fileResponse = JSON.parse(fileBytes.toString("utf8")) as unknown; }
+      catch { return reply.code(502).send({ error: "Figma returned invalid file JSON." }); }
+
+      let variablesResponse: unknown;
+      let variablesWarning: string | undefined;
+      try {
+        const variablesReply = await figmaRequest(body.data.fileKey, "GET");
+        if (!variablesReply.ok) {
+          variablesWarning = variablesReply.status === 403
+            ? "Figma content imported, but local Variables were unavailable. Check Enterprise access and file_variables:read to import token bindings."
+            : "Figma content imported, but local Variables could not be read; token bindings were omitted.";
+        } else {
+          const variablesLength = Number(variablesReply.headers.get("content-length") ?? 0);
+          if (variablesLength > 5 * 1024 * 1024) variablesWarning = "Figma content imported, but the Variables response exceeded the 5 MB limit; token bindings were omitted.";
+          else {
+            try {
+              const variablesBytes = await readBoundedResponse(variablesReply, 5 * 1024 * 1024);
+              try { variablesResponse = JSON.parse(variablesBytes.toString("utf8")) as unknown; }
+              catch { variablesWarning = "Figma content imported, but the Variables response was invalid JSON; token bindings were omitted."; }
+            } catch { variablesWarning = "Figma content imported, but the Variables response exceeded the 5 MB limit; token bindings were omitted."; }
+          }
+        }
+      } catch {
+        variablesWarning = "Figma content imported, but the Variables API could not be reached; token bindings were omitted.";
+      }
+
+      let imported: ReturnType<typeof convertFigmaFileResponse>;
+      try { imported = convertFigmaFileResponse(fileResponse, existing.data, variablesResponse); }
+      catch (error) { return reply.code(422).send({ error: (error as Error).message.slice(0, 300) }); }
+      return { ...imported, warnings: [...imported.warnings, ...(variablesWarning ? [variablesWarning] : [])].slice(0, 30) };
+    } catch (error) {
+      if ((error as Error).message === "API_RESPONSE_TOO_LARGE") return reply.code(413).send({ error: "Figma API response exceeds the configured import limit." });
+      return reply.code(502).send({ error: "Could not reach or convert the Figma file API response." });
+    }
+  });
+
+  app.post<{ Body: unknown }>("/api/integrations/figma/variables/write", async (request, reply) => {
+    if (rejectCrossSite(request, reply)) return;
+    const body = figmaWriteBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Enter a Figma file key, project ID, and current document revision." });
+    if (!projectRootFor(body.data.projectId)) return reply.code(404).send({ error: "Project not found." });
+    const row = db.prepare("SELECT r.snapshot_json AS snapshot FROM document_revisions r JOIN documents d ON d.id = r.document_id AND d.current_revision = r.revision WHERE d.project_id = ? ORDER BY d.updated_at DESC LIMIT 1").get(body.data.projectId) as { snapshot: string } | undefined;
+    if (!row) return reply.code(404).send({ error: "Project document not found." });
+    let document: DesignDocument;
+    try {
+      const parsed = DesignDocumentSchema.safeParse(JSON.parse(row.snapshot) as unknown);
+      if (!parsed.success) return reply.code(409).send({ error: "Project document is invalid and cannot be synchronized." });
+      document = parsed.data;
+    } catch { return reply.code(409).send({ error: "Project document is invalid and cannot be synchronized." }); }
+    if (document.revision !== body.data.expectedRevision) return reply.code(409).send({ error: "Project changed. Refresh before sending its variables to Figma.", currentRevision: document.revision });
+    let payload: { json: string; warnings: string[] };
+    try { payload = exportFigmaVariables(document.designSystem); }
+    catch (error) { return reply.code(400).send({ error: (error as Error).message }); }
+    try {
+      const response = await figmaRequest(body.data.fileKey, "POST", payload.json);
+      if (!response.ok) return reply.code(response.status === 401 || response.status === 403 || response.status === 404 || response.status === 413 ? response.status : 502)
+        .send({ error: response.status === 403 ? "Figma denied the write. Check Enterprise access, edit permission, and the file_variables:write scope." : response.status === 401 ? "Figma rejected the saved access token." : response.status === 404 ? "Figma file not found." : response.status === 413 ? "Figma rejected the Variables request as too large." : "Figma did not accept the Variables request." });
+      const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+      return { submitted: true, projectId: body.data.projectId, fileKey: body.data.fileKey, revision: document.revision, warnings: payload.warnings, result: result.meta ?? {} };
+    } catch (error) {
+      if ((error as Error).message.startsWith("Save a Figma")) return reply.code(409).send({ error: (error as Error).message });
+      return reply.code(502).send({ error: "Could not reach the Figma Variables API." });
+    }
   });
 
   async function parseDocument(projectId: string, raw: unknown, reply: FastifyReply): Promise<DesignDocument | undefined> {
