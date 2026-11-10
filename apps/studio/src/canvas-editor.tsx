@@ -6,6 +6,8 @@ import { AIStudioPanel } from "./ai-studio-panel";
 import { PrototypePanel } from "./prototype-panel";
 import { PrototypePreview } from "./prototype-preview";
 import { CodeHandoffPanel } from "./code-handoff-panel";
+import { ReviewPanel } from "./review-panel";
+import { ContextualGuide, DiscoveryLauncher, useRegisterDiscoveryActions } from "./discovery/DiscoveryProvider";
 
 type Asset = { id: string; name: string; mimeType: string; size: number; kind?: "image" | "reference" };
 type Props = { projectId: string; initial: DesignDocument; assets: Asset[]; onExit: () => void };
@@ -99,6 +101,8 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   const [prototypeOpen, setPrototypeOpen] = useState(false);
   const [prototypePreviewOpen, setPrototypePreviewOpen] = useState(false);
   const [codeHandoffOpen, setCodeHandoffOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewTab, setReviewTab] = useState<"comments" | "revisions">("comments");
   const [activeModeId, setActiveModeId] = useState(initial.designSystem.modes[0]?.id ?? "");
   const [status, setStatus] = useState("All changes saved");
   const [undoStack, setUndoStack] = useState<DesignDocument[]>([]);
@@ -108,6 +112,23 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   const panDrag = useRef<{ x: number; y: number } | null>(null);
   const changeVersion = useRef(0);
   const savedVersion = useRef(0);
+  const closeDiscoveryPanels = () => {
+    setDesignSystemOpen(false);
+    setAiStudioOpen(false);
+    setPrototypeOpen(false);
+    setPrototypePreviewOpen(false);
+    setCodeHandoffOpen(false);
+    setReviewOpen(false);
+  };
+  useRegisterDiscoveryActions({
+    "editor.canvas": () => { closeDiscoveryPanels(); return true; },
+    "editor.ai": () => { closeDiscoveryPanels(); setAiStudioOpen(true); return true; },
+    "editor.design-system": () => { closeDiscoveryPanels(); setDesignSystemOpen(true); return true; },
+    "editor.prototype": () => { closeDiscoveryPanels(); setPrototypeOpen(true); return true; },
+    "editor.review": () => { closeDiscoveryPanels(); setReviewTab("comments"); setReviewOpen(true); return true; },
+    "editor.history": () => { closeDiscoveryPanels(); setReviewTab("revisions"); setReviewOpen(true); return true; },
+    "editor.handoff": () => { closeDiscoveryPanels(); setCodeHandoffOpen(true); return true; }
+  });
 
   const page = document.pages.find(item => item.id === activePageId) ?? document.pages[0];
   const nodes = page?.children ?? [];
@@ -339,18 +360,31 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
     finally { setSaving(false); }
   }
 
-  async function restoreRevision() {
+  async function prepareReviewAnchor(): Promise<{ documentId: string; revision: number; pageId: string; nodeId?: string } | null> {
+    if (!(await save())) return null;
     try {
-      const revisions = await fetch(`/api/projects/${projectId}/revisions`).then(response => response.json()) as { revision: number; summary: string; createdAt: string }[];
-      const choices = revisions.map(item => `r${item.revision} · ${item.summary || "Snapshot"} · ${new Date(item.createdAt).toLocaleString()}`).join("\n");
-      const picked = window.prompt(`Enter the revision number to restore. Current restore is saved as a new revision.\n\n${choices}`);
-      if (!picked) return;
-      const restored = await fetch(`/api/projects/${projectId}/revisions/${encodeURIComponent(picked)}/restore`, { method: "POST" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Restore failed"); return body as DesignDocument; });
+      const response = await fetch(`/api/projects/${projectId}`);
+      const body = await response.json();
+      if (!response.ok || !body.document) throw new Error(body.error ?? "Could not load the saved project revision.");
+      const saved = body.document as DesignDocument;
+      const savedPage = saved.pages.find(item => item.id === page.id);
+      if (!savedPage) throw new Error("Save or reopen the page before adding a review comment.");
+      if (selectedNode && !findNode(savedPage.children, selectedNode.id)) throw new Error("Save this layer before attaching a review comment to it.");
+      return { documentId: saved.documentId, revision: saved.revision, pageId: savedPage.id, ...(selectedNode ? { nodeId: selectedNode.id } : {}) };
+    } catch (error) { setStatus((error as Error).message); return null; }
+  }
+
+  async function restoreRevision(documentId: string, revision: number) {
+    try {
+      if (changeVersion.current !== savedVersion.current && !(await save())) return;
+      const query = new URLSearchParams({ documentId });
+      const restored = await fetch(`/api/projects/${projectId}/revisions/${encodeURIComponent(revision)}/restore?${query}`, { method: "POST" }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Restore failed"); return body as DesignDocument; });
       changeVersion.current += 1;
       savedVersion.current = changeVersion.current;
       setUndoStack(stack => [...stack, document]); setRedoStack([]); setDocument(restored);
       setActivePageId(restored.pages[0].id); setSelectedIds([]); setStatus(`Restored as revision ${restored.revision}`);
-    } catch (error) { setStatus((error as Error).message); }
+      setReviewOpen(false);
+    } catch (error) { setStatus((error as Error).message); throw error; }
   }
 
   function undo() {
@@ -452,20 +486,21 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   }
 
   return <div className="editor-shell">
-    {designSystemOpen && <DesignSystemPanel projectId={projectId} documentRevision={document.revision} localVersion={changeVersion.current} system={document.designSystem} activeModeId={modeId} selectedNode={selectedNode} onApplyToken={tokenId => selectedNode && applyColorToken(selectedNode, tokenId)} onModeChange={setActiveModeId} onChange={updateDesignSystem} onImportFigma={applyFigmaImport} onDeleteToken={deleteDesignToken} onCreateComponent={createComponentFromSelection} onClose={() => setDesignSystemOpen(false)}/>}
-    {aiStudioOpen && <AIStudioPanel projectId={projectId} document={document} pageId={page.id} selectedNodes={selectedNodes} assets={assets} localVersion={changeVersion.current} onApplyDirection={applyGeneratedPages} onApplyPatch={applyAIProposal} onClose={() => setAiStudioOpen(false)}/>}
-    {prototypeOpen && <PrototypePanel document={document} pageId={page.id} selectedNode={selectedNode} onChange={updatePrototype} onPreview={() => { setPrototypeOpen(false); setPrototypePreviewOpen(true); }} onClose={() => setPrototypeOpen(false)}/>}
+    {designSystemOpen && <><DesignSystemPanel projectId={projectId} documentRevision={document.revision} localVersion={changeVersion.current} system={document.designSystem} activeModeId={modeId} selectedNode={selectedNode} onApplyToken={tokenId => selectedNode && applyColorToken(selectedNode, tokenId)} onModeChange={setActiveModeId} onChange={updateDesignSystem} onImportFigma={applyFigmaImport} onDeleteToken={deleteDesignToken} onCreateComponent={createComponentFromSelection} onClose={() => setDesignSystemOpen(false)}/><ContextualGuide id="guide-design-tokens"/></>}
+    {aiStudioOpen && <><AIStudioPanel projectId={projectId} document={document} pageId={page.id} selectedNodes={selectedNodes} assets={assets} localVersion={changeVersion.current} onApplyDirection={applyGeneratedPages} onApplyPatch={applyAIProposal} onClose={() => setAiStudioOpen(false)}/><ContextualGuide id="guide-ai-brief"/></>}
+    {prototypeOpen && <><PrototypePanel document={document} pageId={page.id} selectedNode={selectedNode} onChange={updatePrototype} onPreview={() => { setPrototypeOpen(false); setPrototypePreviewOpen(true); }} onClose={() => setPrototypeOpen(false)}/><ContextualGuide id="guide-prototype-interactions"/></>}
     {prototypePreviewOpen && <PrototypePreview document={document} projectId={projectId} assets={assets} startPageId={page.id} onClose={() => setPrototypePreviewOpen(false)}/>}
     {codeHandoffOpen && <CodeHandoffPanel projectId={projectId} document={document} assets={assets} onSave={save} onClose={() => setCodeHandoffOpen(false)}/>}
-    <header className="editor-top"><button className="back-projects" onClick={onExit}>← Projects</button><span className="editor-divider"/><b>{document.metadata.name || "Untitled project"}</b><span className="save-state" role="status">{status}</span><div className="editor-top-actions"><button onClick={() => setAiStudioOpen(true)}>AI Studio</button><button onClick={() => setDesignSystemOpen(true)}>Design system</button><button onClick={() => setPrototypeOpen(true)}>Prototype</button><button onClick={() => setCodeHandoffOpen(true)}>Code handoff</button><button title="Restore a previous revision" onClick={() => void restoreRevision()}>History</button><button title="Undo (Ctrl+Z)" disabled={!undoStack.length} onClick={undo}>↶</button><button title="Redo (Ctrl+Shift+Z)" disabled={!redoStack.length} onClick={redo}>↷</button><button className="save-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save"}</button></div></header>
-    <nav className="editor-toolbar"><div className="tool-group"><button className={!panMode ? "tool-active" : ""} onClick={() => setPanMode(false)} title="Select">↖ Select</button><button className={panMode ? "tool-active" : ""} onClick={() => setPanMode(true)} title="Pan canvas">✋ Pan</button><button onClick={() => add("frame")}>▣ Frame</button><button onClick={() => add("text")}>T Text</button><button onClick={() => add("shape")}>▱ Shape</button><button onClick={() => add("image")}>▧ Image</button><button onClick={() => add("container")}>▤ Container</button><button disabled={!selectedNode || selectedNode.type === "component-instance"} onClick={createComponentFromSelection}>Create component</button><button disabled={!selectedNode} onClick={() => selectedNode && patch(selectedNode.id, { x: 0 })}>Align left</button><button disabled={!selectedNode} onClick={() => selectedNode && patch(selectedNode.id, { x: Math.round((width - dimensions(selectedNode)[0]) / 2) })}>Center</button><button disabled={selectedIds.length < 2} onClick={groupSelection}>Group {selectedIds.length > 1 ? `(${selectedIds.length})` : ""}</button></div><div className="tool-group"><label>Desktop size <select value={viewport} onChange={event => setViewport(event.target.value as Viewport)}><option value="laptop">Laptop · 1280</option><option value="desktop">Desktop · 1440</option><option value="wide">Wide desktop · 1920</option></select></label><button onClick={() => setZoom(value => Math.max(.25, value - .1))}>−</button><span className="zoom-readout">{Math.round(zoom * 100)}%</span><button onClick={() => setZoom(value => Math.min(1.5, value + .1))}>＋</button></div></nav>
-    <div className="editor-main"><aside className="layers-panel"><div className="panel-heading"><b>Pages</b><button onClick={addPage} title="Add page">＋</button></div><div className="page-list">{document.pages.map(item => <div key={item.id} className={`page-tab ${item.id === page.id ? "page-active" : ""}`}><button onClick={() => { setActivePageId(item.id); setSelectedIds([]); }} onDoubleClick={() => renamePage(item)} title="Double-click to rename">▱ <span>{item.name}</span></button><button className="page-menu" onClick={() => renamePage(item)} aria-label={`Rename ${item.name}`}>···</button></div>)}</div><div className="layer-heading"><b>Layers</b><button onClick={() => add("shape")} title="Add layer">＋</button></div>{layers.map(({ node, depth }) => <button key={node.id} className={`layer-row ${selectedIds.includes(node.id) ? "layer-selected" : ""}`} style={{ paddingLeft: 9 + depth * 15 }} onClick={event => {
+    {reviewOpen && <><ReviewPanel projectId={projectId} documentId={document.documentId} currentRevision={document.revision} initialTab={reviewTab} anchor={{ pageId: page.id, pageName: page.name, ...(selectedNode ? { nodeId: selectedNode.id, nodeName: nodeName(selectedNode) } : {}) }} ensureSaved={prepareReviewAnchor} onRestore={restoreRevision} onClose={() => setReviewOpen(false)}/><ContextualGuide id="guide-review-comments"/></>}
+    <header className="editor-top"><button className="back-projects" onClick={onExit}>← Projects</button><span className="editor-divider"/><b>{document.metadata.name || "Untitled project"}</b><span className="save-state" role="status">{status}</span><div className="editor-top-actions"><DiscoveryLauncher/><button data-discovery-id="uds-editor-review" onClick={() => { setReviewTab("comments"); setReviewOpen(true); }}>Review</button><button data-discovery-id="uds-editor-ai" onClick={() => setAiStudioOpen(true)}>AI Studio</button><button data-discovery-id="uds-editor-design-system" onClick={() => setDesignSystemOpen(true)}>Design system</button><button data-discovery-id="uds-editor-prototype" onClick={() => setPrototypeOpen(true)}>Prototype</button><button data-discovery-id="uds-editor-handoff" onClick={() => setCodeHandoffOpen(true)}>Code handoff</button><button data-discovery-id="uds-editor-history" title="Compare saved revisions and restore history" onClick={() => { setReviewTab("revisions"); setReviewOpen(true); }}>History</button><button data-discovery-id="uds-editor-undo" title="Undo (Ctrl+Z)" disabled={!undoStack.length} onClick={undo}>↶</button><button title="Redo (Ctrl+Shift+Z)" disabled={!redoStack.length} onClick={redo}>↷</button><button data-discovery-id="uds-editor-save" className="save-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save"}</button></div></header>
+    <nav className="editor-toolbar"><div className="tool-group"><button data-discovery-id="uds-editor-select" className={!panMode ? "tool-active" : ""} onClick={() => setPanMode(false)} title="Select">↖ Select</button><button className={panMode ? "tool-active" : ""} onClick={() => setPanMode(true)} title="Pan canvas">✋ Pan</button><button data-discovery-id="uds-editor-frame" onClick={() => add("frame")}>▣ Frame</button><button data-discovery-id="uds-editor-text" onClick={() => add("text")}>T Text</button><button data-discovery-id="uds-editor-shape" onClick={() => add("shape")}>▱ Shape</button><button data-discovery-id="uds-editor-image" onClick={() => add("image")}>▧ Image</button><button data-discovery-id="uds-editor-container" onClick={() => add("container")}>▤ Container</button><button data-discovery-id="uds-editor-component" disabled={!selectedNode || selectedNode.type === "component-instance"} onClick={createComponentFromSelection}>Create component</button><div className="discovery-align-tools" data-discovery-id="uds-editor-align"><button disabled={!selectedNode} onClick={() => selectedNode && patch(selectedNode.id, { x: 0 })}>Align left</button><button disabled={!selectedNode} onClick={() => selectedNode && patch(selectedNode.id, { x: Math.round((width - dimensions(selectedNode)[0]) / 2) })}>Center</button></div><button data-discovery-id="uds-editor-group" disabled={selectedIds.length < 2} onClick={groupSelection}>Group {selectedIds.length > 1 ? `(${selectedIds.length})` : ""}</button></div><div className="tool-group" data-discovery-id="uds-editor-viewport"><label>Desktop size <select value={viewport} onChange={event => setViewport(event.target.value as Viewport)}><option value="laptop">Laptop · 1280</option><option value="desktop">Desktop · 1440</option><option value="wide">Wide desktop · 1920</option></select></label><button onClick={() => setZoom(value => Math.max(.25, value - .1))}>−</button><span className="zoom-readout">{Math.round(zoom * 100)}%</span><button onClick={() => setZoom(value => Math.min(1.5, value + .1))}>＋</button></div></nav>
+    <div className="editor-main"><aside className="layers-panel"><div className="panel-heading"><b>Pages</b><button onClick={addPage} title="Add page">＋</button></div><div className="page-list" data-discovery-id="uds-editor-page-list">{document.pages.map(item => <div key={item.id} className={`page-tab ${item.id === page.id ? "page-active" : ""}`}><button onClick={() => { setActivePageId(item.id); setSelectedIds([]); }} onDoubleClick={() => renamePage(item)} title="Double-click to rename">▱ <span>{item.name}</span></button><button className="page-menu" onClick={() => renamePage(item)} aria-label={`Rename ${item.name}`}>···</button></div>)}</div><div className="layer-heading"><b>Layers</b><button onClick={() => add("shape")} title="Add layer">＋</button></div><div data-discovery-id="uds-editor-layers">{layers.map(({ node, depth }) => <button key={node.id} className={`layer-row ${selectedIds.includes(node.id) ? "layer-selected" : ""}`} style={{ paddingLeft: 9 + depth * 15 }} onClick={event => {
       if (event.ctrlKey || event.metaKey) {
         setSelectedIds(current => current.includes(node.id) ? current.filter(id => id !== node.id) : [...current, node.id]);
       } else setSelectedIds([node.id]);
-    }}><span>{node.type === "text" ? "T" : node.type === "shape" ? "◇" : node.type === "frame" ? "▣" : node.type === "image" ? "▧" : "▤"}</span><span className="layer-title">{nodeName(node)}</span><span onClick={event => { event.stopPropagation(); patch(node.id, { visible: !node.visible }); }} title="Toggle visibility">{node.visible ? "◉" : "○"}</span></button>)}<button className="delete-page" onClick={() => deletePage(page)}>Delete current page</button></aside>
+    }}><span>{node.type === "text" ? "T" : node.type === "shape" ? "◇" : node.type === "frame" ? "▣" : node.type === "image" ? "▧" : "▤"}</span><span className="layer-title">{nodeName(node)}</span><span onClick={event => { event.stopPropagation(); patch(node.id, { visible: !node.visible }); }} title="Toggle visibility">{node.visible ? "◉" : "○"}</span></button>)}</div><button className="delete-page" onClick={() => deletePage(page)}>Delete current page</button></aside>
       <section className={`canvas-workspace ${panMode ? "pan-cursor" : ""}`} onPointerDown={event => { if (panMode || event.button === 1) { panDrag.current = { x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture(event.pointerId); } }} onPointerMove={onPointerMove} onPointerUp={finishPointer} onPointerCancel={finishPointer} onWheel={event => { if (event.ctrlKey) { event.preventDefault(); setZoom(value => Math.min(1.5, Math.max(.25, value - Math.sign(event.deltaY) * .05))); } }}><div className="canvas-stage" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width, height }} onPointerDown={event => { if (event.target === event.currentTarget && event.button === 0 && !panMode) setSelectedIds([]); }}><div className="artboard" style={{ width, height }}><div className="artboard-label">{page.name} · {viewport} · {width} × {height}</div>{nodes.map(node => <CanvasNode key={node.id} node={node} projectId={projectId} designSystem={document.designSystem} modeId={modeId} selected={selectedIds.includes(node.id)} selection={selectedIds} onSelect={target => setSelectedIds([target.id])} onStartDrag={(target, event) => startDrag(target, event)} onResize={(target, event) => { event.stopPropagation(); startDrag(target, event as unknown as React.PointerEvent<HTMLDivElement>, true); }}/>)}</div></div></section>
-      <aside className="inspector-panel"><div className="panel-heading"><b>Design</b></div>{selectedNode ? <>
+      <aside className="inspector-panel" data-discovery-id="uds-editor-inspector"><div className="panel-heading"><b>Design</b></div>{selectedNode ? <>
         <div className="inspector-name">{nodeName(selectedNode)}</div>
         <label className="prop-label">Name<input value={selectedNode.name} onChange={event => patch(selectedNode.id, { name: event.target.value })}/></label>
         <div className="prop-grid"><label className="prop-label">X<input type="number" value={selectedNode.x} onChange={event => patch(selectedNode.id, { x: Number(event.target.value) })}/></label><label className="prop-label">Y<input type="number" value={selectedNode.y} onChange={event => patch(selectedNode.id, { y: Number(event.target.value) })}/></label>{"width" in selectedNode && <label className="prop-label">W<input type="number" value={selectedNode.width as number} onChange={event => patch(selectedNode.id, { width: Math.max(24, Number(event.target.value)) })}/></label>}{"height" in selectedNode && <label className="prop-label">H<input type="number" value={selectedNode.height as number} onChange={event => patch(selectedNode.id, { height: Math.max(24, Number(event.target.value)) })}/></label>}</div>

@@ -100,9 +100,15 @@ This backlog translates the product architecture into independently reviewable s
 
 ## Phase 9 — Collaboration and AI-agent ecosystem
 
-- [ ] Add comments, shared projects and revision review.
-- [ ] Add collaboration only after single-user revision semantics are stable.
-- [ ] Add scoped specialist agents and task/review workflows.
+- [x] Add local review threads anchored to a saved document revision, page, and optional layer; support replies, resolve, and reopen.
+- [x] Compare two saved revisions with page, layer, and design-system change summaries; restore an older snapshot as a new immutable revision.
+- [ ] Complete desktop review of the migration, comment panel, compare view, and restore flow on existing projects.
+- [ ] Add verified identity, project membership/roles, invitation acceptance, and explicit authorization before enabling project sharing.
+- [ ] Add synchronization and conflict recovery for shared projects without weakening revision preconditions or local-first behavior.
+- [ ] Add scoped specialist-agent task definitions with bounded inputs/tools, cancellation, progress, and review-required results.
+- [ ] Require explicit user approval and revision-checked commands before an agent result can modify a design document; record accepted changes in normal revision history.
+
+**Phase 9 progress:** 25% complete; 75% remains. The local review foundation is implemented; multi-user identity/sharing and specialist-agent task workflows remain open. Runtime and desktop review for this new slice is still pending. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md).
 
 ## Phase 10 — Testing, optimization and release
 

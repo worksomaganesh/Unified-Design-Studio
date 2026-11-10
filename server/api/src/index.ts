@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "
 import { extname, join, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { createDefaultDesignSystem, DesignDocumentSchema, migrateDocument, type DesignDocument } from "@uds/design-core";
+import { createDefaultDesignSystem, DesignDocumentSchema, migrateDocument, type DesignDocument, type DesignNode } from "@uds/design-core";
 import { buildCodeExportFiles, collectImageSources, inspectExportSupport } from "@uds/renderer";
 import { registerAIService } from "./ai-service.js";
 import { DocumentCommandError, saveDocumentRevision } from "./document-commands.js";
@@ -35,6 +35,12 @@ const assetProvenanceMigration = readFileSync(fileURLToPath(new URL("../../../do
 if (!db.prepare("SELECT 1 FROM app_migrations WHERE version = 3").get()) {
   db.exec("BEGIN IMMEDIATE");
   try { db.exec(assetProvenanceMigration); db.prepare("INSERT INTO app_migrations (version, applied_at) VALUES (3, ?)").run(new Date().toISOString()); db.exec("COMMIT"); }
+  catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+const reviewThreadsMigration = readFileSync(fileURLToPath(new URL("../../../docs/migrations/004_review_threads.sql", import.meta.url)), "utf8");
+if (!db.prepare("SELECT 1 FROM app_migrations WHERE version = 4").get()) {
+  db.exec("BEGIN IMMEDIATE");
+  try { db.exec(reviewThreadsMigration); db.prepare("INSERT INTO app_migrations (version, applied_at) VALUES (4, ?)").run(new Date().toISOString()); db.exec("COMMIT"); }
   catch (error) { db.exec("ROLLBACK"); throw error; }
 }
 const app = Fastify({ logger: true, bodyLimit: 1024 * 1024 });
@@ -88,11 +94,64 @@ app.get<{ Params: { id: string } }>("/api/projects/:id/revisions", async (reques
   if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
   return db.prepare("SELECT r.document_id AS documentId, r.revision, r.created_at AS createdAt, r.summary FROM document_revisions r JOIN documents d ON d.id = r.document_id WHERE d.project_id = ? ORDER BY r.created_at DESC LIMIT 100").all(request.params.id);
 });
-app.post<{ Params: { id: string; revision: string } }>("/api/projects/:id/revisions/:revision/restore", async (request, reply) => {
+app.get<{ Params: { id: string }; Querystring: { documentId?: string; fromRevision?: string; toRevision?: string } }>("/api/projects/:id/revisions/compare", async (request, reply) => {
+  if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
+  const fromRevision = Number(request.query.fromRevision);
+  const toRevision = Number(request.query.toRevision);
+  const documentId = request.query.documentId;
+  if (!documentId || !Number.isSafeInteger(fromRevision) || fromRevision < 0 || !Number.isSafeInteger(toRevision) || toRevision < 0) {
+    return reply.code(400).send({ error: "A document ID and two valid revision numbers are required." });
+  }
+  const from = loadProjectRevision(request.params.id, fromRevision, documentId);
+  const to = loadProjectRevision(request.params.id, toRevision, documentId);
+  if (!from || !to) return reply.code(404).send({ error: "One or both saved revisions were not found." });
+  const beforePages = new Map(from.document.pages.map(page => [page.id, page] as const));
+  const afterPages = new Map(to.document.pages.map(page => [page.id, page] as const));
+  const pageChanges = [
+    ...[...afterPages.values()].filter(page => !beforePages.has(page.id)).map(page => ({ kind: "added" as const, pageId: page.id, toName: page.name })),
+    ...[...beforePages.values()].filter(page => !afterPages.has(page.id)).map(page => ({ kind: "removed" as const, pageId: page.id, fromName: page.name })),
+    ...[...afterPages.values()].flatMap(page => {
+      const previous = beforePages.get(page.id);
+      return previous && previous.name !== page.name ? [{ kind: "renamed" as const, pageId: page.id, fromName: previous.name, toName: page.name }] : [];
+    }),
+  ];
+  const beforeNodes = new Map(from.document.pages.flatMap(page => flattenReviewNodes(page.children, page.id, page.name)).map(item => [`${item.pageId}\u0000${item.node.id}`, item] as const));
+  const afterNodes = new Map(to.document.pages.flatMap(page => flattenReviewNodes(page.children, page.id, page.name)).map(item => [`${item.pageId}\u0000${item.node.id}`, item] as const));
+  const nodeChanges: { kind: "added" | "removed" | "modified"; pageId: string; nodeId: string; fromName?: string; toName?: string; fromPage?: string; toPage?: string }[] = [];
+  const nodeKeys = new Set([...beforeNodes.keys(), ...afterNodes.keys()]);
+  for (const nodeKey of nodeKeys) {
+    const previous = beforeNodes.get(nodeKey);
+    const next = afterNodes.get(nodeKey);
+    if (!previous && next) nodeChanges.push({ kind: "added", pageId: next.pageId, nodeId: next.node.id, toName: next.node.name || next.node.type, toPage: next.pageName });
+    else if (previous && !next) nodeChanges.push({ kind: "removed", pageId: previous.pageId, nodeId: previous.node.id, fromName: previous.node.name || previous.node.type, fromPage: previous.pageName });
+    else if (previous && next) {
+      const beforeFields = { ...(previous.node as unknown as Record<string, unknown>) };
+      const afterFields = { ...(next.node as unknown as Record<string, unknown>) };
+      delete beforeFields.children;
+      delete afterFields.children;
+      if (previous.pageId !== next.pageId || previous.parentId !== next.parentId || previous.index !== next.index || JSON.stringify(beforeFields) !== JSON.stringify(afterFields)) {
+        nodeChanges.push({ kind: "modified", pageId: next.pageId, nodeId: next.node.id, fromName: previous.node.name || previous.node.type, toName: next.node.name || next.node.type, fromPage: previous.pageName, toPage: next.pageName });
+      }
+    }
+  }
+  const addedNodes = nodeChanges.filter(item => item.kind === "added").length;
+  const removedNodes = nodeChanges.filter(item => item.kind === "removed").length;
+  const modifiedNodes = nodeChanges.filter(item => item.kind === "modified").length;
+  return {
+    documentId, fromRevision, toRevision,
+    pages: pageChanges,
+    nodes: nodeChanges.slice(0, 100),
+    truncated: nodeChanges.length > 100,
+    designSystemChanged: JSON.stringify(from.document.designSystem) !== JSON.stringify(to.document.designSystem),
+    prototypeChanged: JSON.stringify(from.document.prototype) !== JSON.stringify(to.document.prototype),
+    summary: { addedPages: pageChanges.filter(item => item.kind === "added").length, removedPages: pageChanges.filter(item => item.kind === "removed").length, renamedPages: pageChanges.filter(item => item.kind === "renamed").length, addedNodes, removedNodes, modifiedNodes },
+  };
+});
+app.post<{ Params: { id: string; revision: string }; Querystring: { documentId?: string } }>("/api/projects/:id/revisions/:revision/restore", async (request, reply) => {
   if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
   const sourceRevision = Number(request.params.revision);
   if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0) return reply.code(400).send({ error: "Invalid revision number." });
-  const row = db.prepare("SELECT r.document_id AS documentId, r.snapshot_json AS snapshot FROM document_revisions r JOIN documents d ON d.id = r.document_id WHERE d.project_id = ? AND r.revision = ? ORDER BY r.created_at DESC LIMIT 1").get(request.params.id, sourceRevision) as { documentId: string; snapshot: string } | undefined;
+  const row = db.prepare("SELECT r.document_id AS documentId, r.snapshot_json AS snapshot FROM document_revisions r JOIN documents d ON d.id = r.document_id WHERE d.project_id = ? AND r.revision = ? AND (? IS NULL OR r.document_id = ?) ORDER BY r.created_at DESC LIMIT 1").get(request.params.id, sourceRevision, request.query.documentId ?? null, request.query.documentId ?? null) as { documentId: string; snapshot: string } | undefined;
   if (!row) return reply.code(404).send({ error: "Revision not found." });
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -119,6 +178,93 @@ app.post<{ Params: { id: string } }>("/api/projects/:id/archive", async (request
   const result = db.prepare("UPDATE projects SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL").run(now, now, request.params.id);
   if (!result.changes) return reply.code(404).send({ error: "Project not found." });
   return reply.code(204).send();
+});
+
+app.get<{ Params: { id: string } }>("/api/projects/:id/review/threads", async (request, reply) => {
+  if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
+  const rows = db.prepare("SELECT id, document_id AS documentId, anchor_revision AS anchorRevision, page_id AS pageId, node_id AS nodeId, status, created_at AS createdAt, updated_at AS updatedAt FROM review_threads WHERE project_id = ? ORDER BY updated_at DESC LIMIT 200").all(request.params.id) as { id: string; documentId: string; anchorRevision: number; pageId: string; nodeId: string | null; status: "open" | "resolved"; createdAt: string; updatedAt: string }[];
+  return {
+    threads: rows.map(thread => {
+      const anchor = db.prepare("SELECT snapshot_json AS snapshot FROM document_revisions WHERE document_id = ? AND revision = ?").get(thread.documentId, thread.anchorRevision) as { snapshot: string } | undefined;
+      let pageName = "Unknown page";
+      let nodeName: string | null = null;
+      if (anchor) {
+        try {
+          const parsed = DesignDocumentSchema.safeParse(migrateDocument(JSON.parse(anchor.snapshot)));
+          if (parsed.success) {
+            const page = parsed.data.pages.find(item => item.id === thread.pageId);
+            if (page) {
+              pageName = page.name;
+              const node = thread.nodeId ? findReviewNode(page.children, thread.nodeId) : undefined;
+              nodeName = node ? (node.name || node.type) : null;
+            }
+          }
+        } catch { /* Keep the review marker readable if a legacy snapshot cannot be decoded. */ }
+      }
+      const comments = db.prepare("SELECT id, author, body, created_at AS createdAt FROM review_comments WHERE thread_id = ? ORDER BY created_at, id").all(thread.id) as { id: string; author: string; body: string; createdAt: string }[];
+      return { ...thread, pageName, nodeName, comments };
+    }),
+  };
+});
+
+app.post<{ Params: { id: string }; Body: unknown }>("/api/projects/:id/review/threads", async (request, reply) => {
+  if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
+  const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+  const documentId = typeof body.documentId === "string" ? body.documentId : "";
+  const revision = typeof body.anchorRevision === "number" && Number.isSafeInteger(body.anchorRevision) ? body.anchorRevision : -1;
+  const pageId = typeof body.pageId === "string" ? body.pageId : "";
+  const nodeId = typeof body.nodeId === "string" && body.nodeId ? body.nodeId : null;
+  const comment = typeof body.body === "string" ? body.body.trim() : "";
+  if (!documentId || revision < 0 || !pageId || pageId.length > 128 || (nodeId && nodeId.length > 128) || !comment || comment.length > 5000) {
+    return reply.code(400).send({ error: "A saved revision, page, and comment of 1–5000 characters are required." });
+  }
+  const anchor = loadProjectRevision(request.params.id, revision, documentId);
+  if (!anchor) return reply.code(404).send({ error: "The selected project revision was not found." });
+  const page = anchor.document.pages.find(item => item.id === pageId);
+  if (!page || (nodeId && !findReviewNode(page.children, nodeId))) return reply.code(400).send({ error: "The review anchor is not present on that saved page." });
+  const id = randomUUID();
+  const commentId = randomUUID();
+  const now = new Date().toISOString();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("INSERT INTO review_threads (id, project_id, document_id, anchor_revision, page_id, node_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)").run(id, request.params.id, documentId, revision, pageId, nodeId, now, now);
+    db.prepare("INSERT INTO review_comments (id, thread_id, author, body, created_at) VALUES (?, ?, 'You', ?, ?)").run(commentId, id, comment, now);
+    db.prepare("UPDATE projects SET updated_at = ? WHERE id = ? AND archived_at IS NULL").run(now, request.params.id);
+    db.exec("COMMIT");
+  } catch { db.exec("ROLLBACK"); return reply.code(500).send({ error: "Could not save the review comment." }); }
+  return reply.code(201).send({ id, documentId, anchorRevision: revision, pageId, nodeId, status: "open", createdAt: now, updatedAt: now, comments: [{ id: commentId, author: "You", body: comment, createdAt: now }] });
+});
+
+app.post<{ Params: { id: string; threadId: string }; Body: unknown }>("/api/projects/:id/review/threads/:threadId/comments", async (request, reply) => {
+  if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
+  const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+  const comment = typeof body.body === "string" ? body.body.trim() : "";
+  if (!comment || comment.length > 5000) return reply.code(400).send({ error: "Comment must be between 1 and 5000 characters." });
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const thread = db.prepare("SELECT status FROM review_threads WHERE id = ? AND project_id = ?").get(request.params.threadId, request.params.id) as { status: "open" | "resolved" } | undefined;
+    if (!thread) { db.exec("ROLLBACK"); return reply.code(404).send({ error: "Review thread not found." }); }
+    if (thread.status !== "open") { db.exec("ROLLBACK"); return reply.code(409).send({ error: "Reopen this review thread before replying." }); }
+    db.prepare("INSERT INTO review_comments (id, thread_id, author, body, created_at) VALUES (?, ?, 'You', ?, ?)").run(id, request.params.threadId, comment, now);
+    db.prepare("UPDATE review_threads SET updated_at = ? WHERE id = ? AND project_id = ? AND status = 'open'").run(now, request.params.threadId, request.params.id);
+    db.prepare("UPDATE projects SET updated_at = ? WHERE id = ? AND archived_at IS NULL").run(now, request.params.id);
+    db.exec("COMMIT");
+  } catch { db.exec("ROLLBACK"); return reply.code(500).send({ error: "Could not save the reply." }); }
+  return reply.code(201).send({ id, author: "You", body: comment, createdAt: now });
+});
+
+app.patch<{ Params: { id: string; threadId: string }; Body: unknown }>("/api/projects/:id/review/threads/:threadId", async (request, reply) => {
+  if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
+  const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+  const status = body.status;
+  if (status !== "open" && status !== "resolved") return reply.code(400).send({ error: "Thread status must be open or resolved." });
+  const updatedAt = new Date().toISOString();
+  const result = db.prepare("UPDATE review_threads SET status = ?, updated_at = ? WHERE id = ? AND project_id = ?").run(status, updatedAt, request.params.threadId, request.params.id);
+  if (!result.changes) return reply.code(404).send({ error: "Review thread not found." });
+  db.prepare("UPDATE projects SET updated_at = ? WHERE id = ? AND archived_at IS NULL").run(updatedAt, request.params.id);
+  return { id: request.params.threadId, status, updatedAt };
 });
 
 const defaultSettings = { theme: "system", recentProjectLimit: 12, selectedProvider: "none" } as const;
@@ -151,6 +297,30 @@ function matchesAssetSignature(mimeType: string, bytes: Buffer): boolean {
   return false;
 }
 const projectRootFor = (id: string) => db.prepare("SELECT root_path FROM projects WHERE id = ? AND archived_at IS NULL").get(id) as { root_path: string } | undefined;
+function findReviewNode(nodes: DesignNode[], id: string): DesignNode | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    if ("children" in node) {
+      const found = findReviewNode(node.children, id);
+      if (found) return found;
+    }
+  }
+}
+function loadProjectRevision(projectId: string, revision: number, documentId?: string): { documentId: string; document: DesignDocument } | undefined {
+  const row = db.prepare("SELECT r.document_id AS documentId, r.snapshot_json AS snapshot FROM document_revisions r JOIN documents d ON d.id = r.document_id WHERE d.project_id = ? AND r.revision = ? AND (? IS NULL OR r.document_id = ?) ORDER BY d.updated_at DESC LIMIT 1").get(projectId, revision, documentId ?? null, documentId ?? null) as { documentId: string; snapshot: string } | undefined;
+  if (!row) return;
+  try {
+    const migrated = migrateDocument(JSON.parse(row.snapshot));
+    const parsed = DesignDocumentSchema.safeParse(migrated);
+    return parsed.success ? { documentId: row.documentId, document: parsed.data } : undefined;
+  } catch { return; }
+}
+function flattenReviewNodes(nodes: DesignNode[], pageId: string, pageName: string, parentId: string | null = null): { node: DesignNode; pageId: string; pageName: string; parentId: string | null; index: number }[] {
+  return nodes.flatMap((node, index) => [
+    { node, pageId, pageName, parentId, index },
+    ...( "children" in node ? flattenReviewNodes(node.children, pageId, pageName, node.id) : []),
+  ]);
+}
 app.get<{ Params: { id: string } }>("/api/projects/:id/assets", async (request, reply) => {
   if (!projectRootFor(request.params.id)) return reply.code(404).send({ error: "Project not found." });
   return db.prepare("SELECT id, original_name AS name, mime_type AS mimeType, byte_size AS size, width, height, created_at AS createdAt, kind, provenance_json AS provenance FROM assets WHERE project_id = ? ORDER BY created_at DESC").all(request.params.id).map((row: any) => ({ ...row, provenance: JSON.parse(row.provenance) }));

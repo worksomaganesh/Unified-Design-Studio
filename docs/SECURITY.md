@@ -24,6 +24,8 @@
 - External URL imports require user action, origin policy and SSRF protection for server-side fetches.
 - Keep provider API keys in the local service/OS secure store; never in browser bundles, persistent browser storage, design JSON, screenshots, logs or Git. A key is briefly present in the password field and local-service request body during setup.
 - MCP operations are scoped to the active project and use the same validated command service as UI operations.
+- Phase 9 review threads are scoped to an active local project and validated against saved revisions; their `You` author label is not an authenticated identity.
+- Loopback binding is an exposure boundary, not user authentication. Do not expose project review routes to a LAN or remote client until identity, membership, authorization, and request protections are implemented and reviewed.
 - Destructive operations, external network actions and repository writes require explicit confirmation.
 - Minimize research evidence; never capture passwords, cookies, tokens or private project contents.
 - Review every third-party package, transitive dependency, license and security advisory before reuse.

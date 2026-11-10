@@ -2,32 +2,43 @@
 
 An AI-native, local-first product design workspace combining UX planning, multimodal design generation, direct visual editing, reusable design systems, interactive prototypes and frontend handoff.
 
-> **Current stage:** Phase 8 is 90% complete. DTCG/Penpot/Tokens Studio exchange, supported Penpot v3 import, Figma Variables exchange, Figma REST file import, provenance-aware assets, and bounded MCP read/write tools are implemented. Review with an eligible Figma account/file, a representative Penpot archive, and a temporary token-workflow project remains. Phase 7 is set aside at 95%, with hands-on output review pending.
+> **Current stage:** Phase 9 — Collaboration and AI-agent ecosystem — is 25% complete. Local review threads and saved-revision comparison are implemented; desktop review, verified identity/sharing, and scoped specialist-agent workflows remain. Phase 8 remains at 90%, with live Figma, Penpot, and token-workflow review pending.
 
-## Status
+## Project progress
 
-- Nine product dossiers expanded: Claude Design, OpenDesign, Figma, Google Stitch, Penpot, Doop, Paper, v0 and UX Pilot.
-- Comparative feature matrix and implementation priorities updated.
-- Architecture and technology recommendations reviewed.
-- Fourteen architecture decisions recorded.
-- Phase 1 database schema and development backlog specified.
-- Initial design-core and renderer packages started; see [Phase 1 backlog](docs/DEVELOPMENT_BACKLOG.md).
-- Workspace shell now supports local project creation, listing, and reopening the saved starter document through the local service.
-- Canvas editor supports laptop/desktop artboards, page management, nested layer grouping, flex/grid controls, node creation and transforms, undo/redo, revision restore, design-token color links, reusable components with typed properties/variants, and versioned design-system JSON import/export; see the [development backlog](docs/DEVELOPMENT_BACKLOG.md).
-- Code handoff downloads React, static HTML/CSS, design-system tokens, project images, and an export support report in a ZIP; its current canvas can be reviewed in a script-free restricted preview. See [Code handoff](docs/CODE_HANDOFF.md).
-- Phase 8 supports DTCG/Penpot/Tokens Studio exchange, supported editable Penpot v3 imports, Figma REST file conversion and Variables API reads/create-only writes, and MCP project/layer summaries plus revision-checked text and rename commands. Raster assets record provenance; SVG/PDF and native source files retain provenance and conversion notes. Figma `.fig` files remain reference-only; file API conversion limits and scopes are documented in the [interoperability guide](docs/INTEROPERABILITY.md) and [Phase 8 backlog](docs/DEVELOPMENT_BACKLOG.md).
-- AI Studio supports provider setup, brief-to-flow planning, editable screen inventories, alternative editable desktop directions, image references, reviewed selection patches, and local deterministic quality checks; see [AI generation](docs/AI_GENERATION.md).
-- Prototype Studio supports validated interactions, variables and text bindings, component variant changes, sandboxed clickable preview, and local UX/accessibility checks; see [prototyping](docs/PROTOTYPING.md).
-- Phase 5 implementation, workspace typecheck, and Studio production build are complete. A live provider smoke request remains operational verification; see the [Phase 5 backlog](docs/DEVELOPMENT_BACKLOG.md).
-- The Phase 3 browser connection issue and recovery sequence are documented in [local preview troubleshooting](docs/LOCAL_PREVIEW_TROUBLESHOOTING.md).
-- REA setup and the Notes demo DOM observation are complete; direct competitor-product validations remain 0/9 and are tracked separately in [Phase 0 status](docs/PHASE_0_STATUS.md).
-- See [Phase 0 status](docs/PHASE_0_STATUS.md).
+| Phase | Progress | Current state |
+|---|---:|---|
+| 0 — Research and reverse engineering | 15/16 checklist items (94%) | REA is installed and connected to Antigravity (229 tools); the Notes demo DOM state change was observed. One dedicated browser-profile item remains. Direct REA workflows for the nine products remain 0/9. See [Phase 0 status](docs/PHASE_0_STATUS.md). |
+| 1 — Product architecture and specification | 100% | Architecture, document model, API/security boundaries, schema and backlog are complete. |
+| 2 — Application foundation and workspace | 100% | Local project creation, opening and persistence exit gate is met. |
+| 3 — Design canvas and rendering | 90% | Desktop editing is implemented; hands-on laptop/desktop canvas review remains. Mobile and tablet are out of scope. |
+| 4 — Design systems and components | 100% | Tokens, themes, aliases, components and versioned design-system exchange are implemented. |
+| 5 — AI design generation | 95% | Implementation is complete; a live provider request needs the user’s key and model. |
+| 6 — Prototyping and UX | 95% | Implementation is complete; hands-on preview and interaction review remains. |
+| 7 — Code generation and handoff | 95% | React and HTML/CSS export are implemented; downloaded output review remains. |
+| 8 — Interoperability | 90% | DTCG, Penpot v3 subset, Figma REST file/Variables exchange, asset provenance, and bounded MCP tools are implemented. Live Figma, Penpot, and token-workflow review remains. |
+| 9 — Collaboration and AI-agent ecosystem | 25% | Local page/layer comments, thread replies/resolution, and revision comparison are implemented. Desktop review, project identity/sharing, synchronization, and specialist-agent task/review flows remain. See [Phase 9 collaboration](docs/PHASE_9_COLLABORATION.md). |
+| 10 — Testing, optimization and release | Not started | — |
+
+See the [development backlog](docs/DEVELOPMENT_BACKLOG.md) and [roadmap](docs/DEVELOPMENT_ROADMAP.md) for detailed gates and limitations.
+
+## Implemented capabilities
+
+- Nine product research dossiers, the comparative feature matrix, and fourteen architecture decisions are recorded.
+- The workspace persists projects locally. The desktop canvas supports pages, nested layers, flex/grid controls, undo/redo, revision restore, reusable components and token links.
+- AI Studio supports flow planning, editable screen inventories, design directions, reviewed selection-scoped patches, and local quality checks. See [AI generation](docs/AI_GENERATION.md).
+- Prototype Studio supports validated interactions, variables, text bindings, component variants, sandboxed preview and local UX/accessibility checks. See [prototyping](docs/PROTOTYPING.md).
+- Code handoff exports React, static HTML/CSS, tokens, images and a support report in a ZIP, with a script-free restricted preview. See [Code handoff](docs/CODE_HANDOFF.md).
+- Phase 8 exchanges DTCG/Penpot/Tokens Studio tokens, imports supported Penpot v3 and Figma REST file content, and reads or creates Figma Variables. Figma `.fig` uploads remain reference-only. MCP provides bounded project/layer reads and revision-checked text/rename commands. See the [interoperability guide](docs/INTEROPERABILITY.md).
+- Phase 9 adds local review threads anchored to saved pages/layers, reply and resolution controls, and revision comparison while preserving immutable design history. Multi-user sharing and agent orchestration are not yet enabled; see [Phase 9 collaboration](docs/PHASE_9_COLLABORATION.md).
+- Product discovery adds a first-run welcome, searchable guide to 58 verified capabilities, eight short category tours, contextual tips, saved onboarding progress, and a structured What's New panel. See the [feature inventory](docs/PRODUCT_FEATURE_INVENTORY.md), [onboarding architecture](docs/ONBOARDING_ARCHITECTURE.md), [tour guide](docs/PRODUCT_TOUR_GUIDE.md), and [What's New system](docs/WHATS_NEW_SYSTEM.md).
+- Workspace typecheck and Studio production build pass. Phase 3 desktop review and Phase 5–8 live checks remain as listed above.
 
 ## Product workflow
 
 **Brief / PRD / reference → UX flow and screen plan → design directions → editable desktop screens → laptop/desktop preview → clickable prototype → React/CSS handoff.**
 
-This is not nine embedded clones. UDS will implement one coherent workflow with a canonical, versioned design document shared by the editor, AI, renderer, prototype engine and exporters.
+This is not nine embedded clones. UDS is being built as one coherent workflow with a canonical, versioned design document shared by the editor, AI, renderer, prototype engine and exporters.
 
 ## Research
 
@@ -57,7 +68,7 @@ See the [comparative feature matrix](research/feature-matrix/FEATURE_MATRIX.md).
 - Isolated preview runtime.
 - One command service shared by UI, AI and later MCP adapters.
 
-The detailed stack remains subject to Phase 1 spikes. See [architecture](docs/ARCHITECTURE.md), [tech stack](docs/TECH_STACK.md), [design document model](docs/DESIGN_DOCUMENT_MODEL.md) and [decisions](docs/decisions/DECISIONS.md).
+The architecture and stack baseline is documented in [architecture](docs/ARCHITECTURE.md), [tech stack](docs/TECH_STACK.md), [design document model](docs/DESIGN_DOCUMENT_MODEL.md) and [decisions](docs/decisions/DECISIONS.md).
 
 ## Repository structure
 
@@ -81,6 +92,6 @@ pnpm dev
 
 The Vite studio runs on `127.0.0.1:5173` and proxies to the local API on `127.0.0.1:4318`. Project records and document revisions use SQLite; project assets are stored in per-project folders under the OS application data directory. Set `UDS_DATA_DIR` to choose a different local data root. Provider selections and workspace preferences are persisted. Provider keys pass from the password field to dedicated local-service routes, are stored in Windows Credential Manager, and are not returned to the browser after saving.
 
-## Phase 0 caveat
+## Phase 0 evidence note
 
-Public-source research and architecture consolidation are complete for this pass. REA is a powerful browser-observation tool, not a sandbox. Do not disable endpoint protection or create exclusions to force an installer download. Resolve the exact McAfee detection using the file hash, official release signature/checksum and vendor guidance before installation. REA/Antigravity/CDP validation requires the user's local Windows environment.
+REA is installed and connected to Antigravity. A Notes demo export confirmed the page's DOM status change; the capture recorded no network requests because REA attached after the initial fetch. Direct REA workflows for the nine researched products remain unvalidated (0/9), and the dedicated research browser profile is still open. See [Phase 0 status](docs/PHASE_0_STATUS.md).

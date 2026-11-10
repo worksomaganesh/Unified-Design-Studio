@@ -1,6 +1,6 @@
 # Development roadmap
 
-**Current phase:** Phase 8 — Imports, exports and interoperability (90% complete). DTCG/Penpot/Tokens Studio exchange, supported Penpot v3 conversion, Figma REST file import and Variables exchange, provenance-aware assets, and bounded read/write MCP tools are implemented. Review with an eligible Figma account/file, a representative Penpot archive, and a temporary token-workflow project remains. Phase 7 is set aside at 95%, with hands-on output review pending; Phase 6 preview review, Phase 5 live provider smoke verification, and Phase 3 desktop visual review are also open.
+**Current phase:** Phase 9 — Collaboration and AI-agent ecosystem (25% complete). Local page/layer review threads, replies/resolution, and saved-revision comparison are implemented; runtime/desktop review is pending. Identity, shared-project permissions/synchronization, and specialist-agent task/review workflows remain open. Phase 8 remains at 90% with live Figma/Penpot/token review open. Phase 7 is set aside at 95%, with hands-on output review pending; Phase 6 preview review, Phase 5 live provider smoke verification, and Phase 3 desktop visual review are also open.
 Phase names and numbering follow the project owner's 0–10 plan. No delivery dates are committed.
 
 ## Phase 0 — Intelligence gathering and reverse engineering
@@ -41,7 +41,7 @@ Add supported Figma/Penpot exchange, reference and asset imports, document expor
 
 ## Phase 9 — Collaboration and AI-agent ecosystem
 
-Add comments, shared/realtime projects, revision review and scoped agent collaboration after single-user editing is dependable.
+The local review foundation now stores comments separately from design snapshots and anchors them to a validated saved revision, page, and optional layer. The editor can resolve/reopen threads and compare saved revisions, with restores appended to immutable history. Current progress is 25%; identity, membership/roles, invitations, shared-project synchronization, and scoped specialist-agent task/review workflows remain. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md). Do not expose review routes beyond loopback while the app has no verified user identity or project authorization model.
 
 ## Phase 10 — Testing, optimization and release
 

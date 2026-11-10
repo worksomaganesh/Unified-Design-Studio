@@ -1,6 +1,6 @@
 # Internal API contracts — v0 baseline
 
-**Status:** Project/document APIs, Phase 5 AI routes, Phase 7 code export routes, provenance-aware asset uploads, DTCG and Figma Variables adapters, Figma REST file import, supported Penpot v3 import, and bounded MCP read/write tools are implemented as described below. Live Figma and representative Penpot verification remain open.
+**Status:** Project/document APIs, Phase 5 AI routes, Phase 7 code export routes, provenance-aware asset uploads, DTCG and Figma Variables adapters, Figma REST file import, supported Penpot v3 import, bounded MCP read/write tools, and local Phase 9 review threads/revision comparison are implemented as described below. Live external-file verification remains open.
 
 ## 1. Principles
 
@@ -17,6 +17,7 @@
 |---|---|
 | Projects | create/list/open/rename/duplicate/archive/delete |
 | Documents | load/save/validate/migrate/snapshot/revision-history/restore |
+| Review | project-scoped local comments anchored to immutable revisions; page/layer revision comparison |
 | Assets | upload, list with provenance, download, remove; SVG/PDF are reference-only |
 | Nodes | create/update/move/resize/reorder/delete |
 | Design system | token/theme/component/variant operations |
@@ -126,3 +127,15 @@ Long-running generation, import, screenshot, preview and export may later return
 `pnpm --filter @uds/local-server mcp` starts the local `stdio` server. The Studio must have created the database first. `UDS_DATA_DIR` can point both processes at the same data folder. Read tools are `list_projects`, `get_project_summary`, and `get_node_summaries`. Optional writes are `set_layer_text` and `rename_layer`. Inputs are schema-validated, project IDs are UUIDs, output is capped, and text is truncated. It does not return local file paths, binary assets, credentials, full document snapshots, or arbitrary prototype payloads.
 
 Both write tools call the schema-validated, revision-checked document save command used by the Studio. They affect only one existing layer's text or name, create a revision, and reject stale revisions. Their descriptions and annotations mark them as mutating; the host should show the change and obtain user approval before invocation. No arbitrary shell, filesystem, or unrestricted network tool is exposed. See [`INTEROPERABILITY.md`](INTEROPERABILITY.md) for DTCG/Penpot/Tokens Studio exchange limits and local Antigravity configuration guidance.
+
+## 12. Phase 9 local review
+
+| Route | Purpose |
+|---|---|
+| `GET /api/projects/:id/review/threads` | List up to 200 review threads for one active local project, with comments and page/layer names resolved from the anchored revision. |
+| `POST /api/projects/:id/review/threads` | Create a page- or layer-anchored thread after validating the page/layer against the specified saved document revision. |
+| `POST /api/projects/:id/review/threads/:threadId/comments` | Append a reply to an open thread. Resolved threads must be reopened first. |
+| `PATCH /api/projects/:id/review/threads/:threadId` | Resolve or reopen a project-scoped thread. |
+| `GET /api/projects/:id/revisions/compare?documentId=…&fromRevision=…&toRevision=…` | Return page/layer change summaries plus design-system/prototype change flags; at most 100 changed layers are listed. Full snapshots are not returned. |
+
+Review threads and comments are separate from design snapshots. The local author label is `You`; it does not establish account identity. All routes require an active project and the service binds to loopback. They are not a multi-user authorization layer and must not be exposed to network clients. Shared projects, identity, roles, synchronization, and specialist-agent tasks remain future work. Revision restore uses the existing restore route and appends a new immutable revision. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md).

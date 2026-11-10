@@ -1,4 +1,4 @@
--- SQLite initial schema. Apply each numbered migration transactionally; current asset provenance fields are added in migrations/003_asset_provenance.sql.
+-- SQLite initial schema. Apply numbered migrations transactionally; asset provenance is in 003 and local review threads/comments are in 004.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE projects (
