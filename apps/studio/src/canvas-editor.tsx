@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DesignDocumentSchema, designTokenCssValue, resolveComponentInstance, resolveDesignToken, type ComponentDefinition, type ComponentProperty, type DesignDocument, type DesignNode, type DesignSystem, type Prototype } from "@uds/design-core";
 import { type AIPatchOperation, type PatchProposal } from "@uds/ai-engine";
-import { DesignSystemPanel } from "./design-system-panel";
-import { AIStudioPanel } from "./ai-studio-panel";
-import { PrototypePanel } from "./prototype-panel";
-import { PrototypePreview } from "./prototype-preview";
-import { CodeHandoffPanel } from "./code-handoff-panel";
-import { ReviewPanel } from "./review-panel";
 import { ContextualGuide, DiscoveryLauncher, useRegisterDiscoveryActions } from "./discovery/DiscoveryProvider";
+import "./conflict-recovery.css";
+import "./panel-loading.css";
+
+const DesignSystemPanel = lazy(() => import("./design-system-panel").then(module => ({ default: module.DesignSystemPanel })));
+const AIStudioPanel = lazy(() => import("./ai-studio-panel").then(module => ({ default: module.AIStudioPanel })));
+const PrototypePanel = lazy(() => import("./prototype-panel").then(module => ({ default: module.PrototypePanel })));
+const PrototypePreview = lazy(() => import("./prototype-preview").then(module => ({ default: module.PrototypePreview })));
+const CodeHandoffPanel = lazy(() => import("./code-handoff-panel").then(module => ({ default: module.CodeHandoffPanel })));
+const ReviewPanel = lazy(() => import("./review-panel").then(module => ({ default: module.ReviewPanel })));
 
 type Asset = { id: string; name: string; mimeType: string; size: number; kind?: "image" | "reference" };
 type Props = { projectId: string; initial: DesignDocument; assets: Asset[]; onExit: () => void };
 type Viewport = "laptop" | "desktop" | "wide";
 type Page = DesignDocument["pages"][number];
+type SaveConflict = { currentRevision?: number };
 type Drag = {
   id: string;
   pageId: string;
@@ -105,6 +109,10 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   const [reviewTab, setReviewTab] = useState<"comments" | "revisions">("comments");
   const [activeModeId, setActiveModeId] = useState(initial.designSystem.modes[0]?.id ?? "");
   const [status, setStatus] = useState("All changes saved");
+  const [saveConflict, setSaveConflict] = useState<SaveConflict | null>(null);
+  const [conflictBusy, setConflictBusy] = useState(false);
+  const [conflictError, setConflictError] = useState("");
+  const [conflictNotice, setConflictNotice] = useState("");
   const [undoStack, setUndoStack] = useState<DesignDocument[]>([]);
   const [redoStack, setRedoStack] = useState<DesignDocument[]>([]);
   const [panMode, setPanMode] = useState(false);
@@ -339,18 +347,25 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   }
 
   async function save(): Promise<boolean> {
-    if (saving) return false;
+    if (saving || saveConflict) return false;
     if (changeVersion.current === savedVersion.current) { setStatus("All changes saved"); return true; }
     const saveVersion = changeVersion.current;
     setSaving(true); setStatus("Saving…");
     try {
       const snapshot = document;
       const response = await fetch(`/api/projects/${projectId}/document`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(snapshot) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Save failed");
+      const body = await response.json().catch(() => null) as { error?: string; currentRevision?: number; revision?: number; metadata?: DesignDocument["metadata"] } | null;
+      if (response.status === 409) {
+        setSaveConflict({ currentRevision: Number.isSafeInteger(body?.currentRevision) ? body!.currentRevision : undefined });
+        setConflictError("");
+        setConflictNotice("");
+        setStatus("Revision conflict · local changes preserved");
+        return false;
+      }
+      if (!response.ok) throw new Error(body?.error ?? "Save failed");
       setDocument(current => {
         const editsRemain = JSON.stringify(current) !== JSON.stringify(snapshot);
-        return editsRemain ? { ...current, revision: body.revision, metadata: body.metadata } : body;
+        return editsRemain ? { ...current, revision: body!.revision!, metadata: body!.metadata! } : body as DesignDocument;
       });
       const currentVersionSaved = changeVersion.current === saveVersion;
       savedVersion.current = saveVersion;
@@ -358,6 +373,60 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
       return currentVersionSaved;
     } catch (error) { setStatus((error as Error).message); return false; }
     finally { setSaving(false); }
+  }
+
+  function downloadLocalDraft() {
+    setConflictError("");
+    setConflictNotice("");
+    try {
+      const slug = (document.metadata.name || "design").trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/\s+/g, "-").slice(0, 72) || "design";
+      const blobUrl = window.URL.createObjectURL(new Blob([JSON.stringify(document, null, 2)], { type: "application/json" }));
+      const link = window.document.createElement("a");
+      link.href = blobUrl;
+      link.download = `UDS-${slug}-local-draft-based-on-r${document.revision}.json`;
+      window.document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+      setConflictNotice("Draft backup downloaded. Keep it before choosing to replace your local draft.");
+    } catch {
+      setConflictError("Could not create the draft backup. Your local changes are still open in this editor.");
+    }
+  }
+
+  async function loadLatestSavedVersion() {
+    if (conflictBusy) return;
+    setConflictBusy(true);
+    setConflictError("");
+    setConflictNotice("");
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      const body = await response.json().catch(() => null) as { error?: string; document?: unknown } | null;
+      if (!response.ok || !body?.document) throw new Error(body?.error ?? "Could not load the latest saved version.");
+      const parsed = DesignDocumentSchema.safeParse(body.document);
+      if (!parsed.success) throw new Error("The latest saved version did not pass document validation. Your local draft remains open.");
+      const latest = parsed.data;
+      changeVersion.current += 1;
+      savedVersion.current = changeVersion.current;
+      setDocument(latest);
+      setUndoStack([]);
+      setRedoStack([]);
+      setActivePageId(current => latest.pages.some(item => item.id === current) ? current : latest.pages[0].id);
+      setSelectedIds([]);
+      setSaveConflict(null);
+      setStatus(`Loaded saved revision ${latest.revision}`);
+    } catch (error) {
+      setConflictError((error as Error).message || "Could not load the latest saved version. Your local draft remains open.");
+    } finally {
+      setConflictBusy(false);
+    }
+  }
+
+  function keepEditingAfterConflict() {
+    setSaveConflict(null);
+    setConflictError("");
+    setConflictNotice("");
+    setStatus("Revision conflict · local draft kept");
   }
 
   async function prepareReviewAnchor(): Promise<{ documentId: string; revision: number; pageId: string; nodeId?: string } | null> {
@@ -409,6 +478,7 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || saveConflict) return;
       const target = event.target as HTMLElement | null;
       const typing = target?.matches("input, textarea, select, [contenteditable='true']");
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void save(); }
@@ -419,7 +489,7 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
       if (event.key === "Escape") setSelectedIds([]);
     };
     window.addEventListener("keydown", handler); return () => window.removeEventListener("keydown", handler);
-  }, [document, nodes, page, selectedIds, undoStack, redoStack]);
+  }, [document, nodes, page, selectedIds, undoStack, redoStack, saveConflict]);
 
   function onPointerMove(event: React.PointerEvent) {
     if (panDrag.current) {
@@ -486,13 +556,16 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
   }
 
   return <div className="editor-shell">
+    {saveConflict && <SaveConflictDialog localRevision={document.revision} currentRevision={saveConflict.currentRevision} busy={conflictBusy} error={conflictError} notice={conflictNotice} onKeepEditing={keepEditingAfterConflict} onDownloadDraft={downloadLocalDraft} onLoadLatest={() => void loadLatestSavedVersion()}/>}
+    <Suspense fallback={<div className="editor-panel-loading" role="status" aria-live="polite">Opening workspace panel…</div>}>
     {designSystemOpen && <><DesignSystemPanel projectId={projectId} documentRevision={document.revision} localVersion={changeVersion.current} system={document.designSystem} activeModeId={modeId} selectedNode={selectedNode} onApplyToken={tokenId => selectedNode && applyColorToken(selectedNode, tokenId)} onModeChange={setActiveModeId} onChange={updateDesignSystem} onImportFigma={applyFigmaImport} onDeleteToken={deleteDesignToken} onCreateComponent={createComponentFromSelection} onClose={() => setDesignSystemOpen(false)}/><ContextualGuide id="guide-design-tokens"/></>}
     {aiStudioOpen && <><AIStudioPanel projectId={projectId} document={document} pageId={page.id} selectedNodes={selectedNodes} assets={assets} localVersion={changeVersion.current} onApplyDirection={applyGeneratedPages} onApplyPatch={applyAIProposal} onClose={() => setAiStudioOpen(false)}/><ContextualGuide id="guide-ai-brief"/></>}
     {prototypeOpen && <><PrototypePanel document={document} pageId={page.id} selectedNode={selectedNode} onChange={updatePrototype} onPreview={() => { setPrototypeOpen(false); setPrototypePreviewOpen(true); }} onClose={() => setPrototypeOpen(false)}/><ContextualGuide id="guide-prototype-interactions"/></>}
     {prototypePreviewOpen && <PrototypePreview document={document} projectId={projectId} assets={assets} startPageId={page.id} onClose={() => setPrototypePreviewOpen(false)}/>}
     {codeHandoffOpen && <CodeHandoffPanel projectId={projectId} document={document} assets={assets} onSave={save} onClose={() => setCodeHandoffOpen(false)}/>}
     {reviewOpen && <><ReviewPanel projectId={projectId} documentId={document.documentId} currentRevision={document.revision} initialTab={reviewTab} anchor={{ pageId: page.id, pageName: page.name, ...(selectedNode ? { nodeId: selectedNode.id, nodeName: nodeName(selectedNode) } : {}) }} ensureSaved={prepareReviewAnchor} onRestore={restoreRevision} onClose={() => setReviewOpen(false)}/><ContextualGuide id="guide-review-comments"/></>}
-    <header className="editor-top"><button className="back-projects" onClick={onExit}>← Projects</button><span className="editor-divider"/><b>{document.metadata.name || "Untitled project"}</b><span className="save-state" role="status">{status}</span><div className="editor-top-actions"><DiscoveryLauncher/><button data-discovery-id="uds-editor-review" onClick={() => { setReviewTab("comments"); setReviewOpen(true); }}>Review</button><button data-discovery-id="uds-editor-ai" onClick={() => setAiStudioOpen(true)}>AI Studio</button><button data-discovery-id="uds-editor-design-system" onClick={() => setDesignSystemOpen(true)}>Design system</button><button data-discovery-id="uds-editor-prototype" onClick={() => setPrototypeOpen(true)}>Prototype</button><button data-discovery-id="uds-editor-handoff" onClick={() => setCodeHandoffOpen(true)}>Code handoff</button><button data-discovery-id="uds-editor-history" title="Compare saved revisions and restore history" onClick={() => { setReviewTab("revisions"); setReviewOpen(true); }}>History</button><button data-discovery-id="uds-editor-undo" title="Undo (Ctrl+Z)" disabled={!undoStack.length} onClick={undo}>↶</button><button title="Redo (Ctrl+Shift+Z)" disabled={!redoStack.length} onClick={redo}>↷</button><button data-discovery-id="uds-editor-save" className="save-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save"}</button></div></header>
+    </Suspense>
+    <header className="editor-top"><button className="back-projects" onClick={onExit}>← Projects</button><span className="editor-divider"/><b>{document.metadata.name || "Untitled project"}</b><span className="save-state" role="status">{status}</span><div className="editor-top-actions"><DiscoveryLauncher/><button data-discovery-id="uds-editor-review" onClick={() => { setReviewTab("comments"); setReviewOpen(true); }}>Review</button><button data-discovery-id="uds-editor-ai" onClick={() => setAiStudioOpen(true)}>AI Studio</button><button data-discovery-id="uds-editor-design-system" onClick={() => setDesignSystemOpen(true)}>Design system</button><button data-discovery-id="uds-editor-prototype" onClick={() => setPrototypeOpen(true)}>Prototype</button><button data-discovery-id="uds-editor-handoff" onClick={() => setCodeHandoffOpen(true)}>Code handoff</button><button data-discovery-id="uds-editor-history" title="Compare saved revisions and restore history" onClick={() => { setReviewTab("revisions"); setReviewOpen(true); }}>History</button><button data-discovery-id="uds-editor-undo" title="Undo (Ctrl+Z)" disabled={!undoStack.length} onClick={undo}>↶</button><button title="Redo (Ctrl+Shift+Z)" disabled={!redoStack.length} onClick={redo}>↷</button><button data-discovery-id="uds-editor-save" className="save-button" onClick={() => void save()} disabled={saving || Boolean(saveConflict)}>{saving ? "Saving…" : "Save"}</button></div></header>
     <nav className="editor-toolbar"><div className="tool-group"><button data-discovery-id="uds-editor-select" className={!panMode ? "tool-active" : ""} onClick={() => setPanMode(false)} title="Select">↖ Select</button><button className={panMode ? "tool-active" : ""} onClick={() => setPanMode(true)} title="Pan canvas">✋ Pan</button><button data-discovery-id="uds-editor-frame" onClick={() => add("frame")}>▣ Frame</button><button data-discovery-id="uds-editor-text" onClick={() => add("text")}>T Text</button><button data-discovery-id="uds-editor-shape" onClick={() => add("shape")}>▱ Shape</button><button data-discovery-id="uds-editor-image" onClick={() => add("image")}>▧ Image</button><button data-discovery-id="uds-editor-container" onClick={() => add("container")}>▤ Container</button><button data-discovery-id="uds-editor-component" disabled={!selectedNode || selectedNode.type === "component-instance"} onClick={createComponentFromSelection}>Create component</button><div className="discovery-align-tools" data-discovery-id="uds-editor-align"><button disabled={!selectedNode} onClick={() => selectedNode && patch(selectedNode.id, { x: 0 })}>Align left</button><button disabled={!selectedNode} onClick={() => selectedNode && patch(selectedNode.id, { x: Math.round((width - dimensions(selectedNode)[0]) / 2) })}>Center</button></div><button data-discovery-id="uds-editor-group" disabled={selectedIds.length < 2} onClick={groupSelection}>Group {selectedIds.length > 1 ? `(${selectedIds.length})` : ""}</button></div><div className="tool-group" data-discovery-id="uds-editor-viewport"><label>Desktop size <select value={viewport} onChange={event => setViewport(event.target.value as Viewport)}><option value="laptop">Laptop · 1280</option><option value="desktop">Desktop · 1440</option><option value="wide">Wide desktop · 1920</option></select></label><button onClick={() => setZoom(value => Math.max(.25, value - .1))}>−</button><span className="zoom-readout">{Math.round(zoom * 100)}%</span><button onClick={() => setZoom(value => Math.min(1.5, value + .1))}>＋</button></div></nav>
     <div className="editor-main"><aside className="layers-panel"><div className="panel-heading"><b>Pages</b><button onClick={addPage} title="Add page">＋</button></div><div className="page-list" data-discovery-id="uds-editor-page-list">{document.pages.map(item => <div key={item.id} className={`page-tab ${item.id === page.id ? "page-active" : ""}`}><button onClick={() => { setActivePageId(item.id); setSelectedIds([]); }} onDoubleClick={() => renamePage(item)} title="Double-click to rename">▱ <span>{item.name}</span></button><button className="page-menu" onClick={() => renamePage(item)} aria-label={`Rename ${item.name}`}>···</button></div>)}</div><div className="layer-heading"><b>Layers</b><button onClick={() => add("shape")} title="Add layer">＋</button></div><div data-discovery-id="uds-editor-layers">{layers.map(({ node, depth }) => <button key={node.id} className={`layer-row ${selectedIds.includes(node.id) ? "layer-selected" : ""}`} style={{ paddingLeft: 9 + depth * 15 }} onClick={event => {
       if (event.ctrlKey || event.metaKey) {
@@ -524,6 +597,54 @@ export function CanvasEditor({ projectId, initial, assets, onExit }: Props) {
       </> : selectedIds.length > 1 ? <div className="selection-summary">{selectedIds.length} layers selected. Use Group to create a nested parent.</div> : <p className="inspector-hint">Select a layer on the canvas to edit its properties.</p>}
         <div className="inspector-section"><b>Canvas</b><div className="detail-row"><span>Page</span><b>{document.pages.length} total</b></div><div className="detail-row"><span>Revision</span><b>{document.revision}</b></div></div></aside></div>
   </div>;
+}
+
+function SaveConflictDialog({ localRevision, currentRevision, busy, error, notice, onKeepEditing, onDownloadDraft, onLoadLatest }: {
+  localRevision: number;
+  currentRevision?: number;
+  busy: boolean;
+  error: string;
+  notice: string;
+  onKeepEditing: () => void;
+  onDownloadDraft: () => void;
+  onLoadLatest: () => void;
+}) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const keepEditingRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const previousFocus = window.document.activeElement instanceof HTMLElement ? window.document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => keepEditingRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
+  function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onKeepEditing();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+    if (!controls.length) { event.preventDefault(); return; }
+    if (event.shiftKey && window.document.activeElement === controls[0]) { event.preventDefault(); controls.at(-1)?.focus(); }
+    else if (!event.shiftKey && window.document.activeElement === controls.at(-1)) { event.preventDefault(); controls[0].focus(); }
+  }
+  return <div className="conflict-recovery-scrim"><section ref={dialogRef} className="conflict-recovery-dialog" role="alertdialog" aria-modal="true" aria-labelledby="conflict-recovery-title" aria-describedby="conflict-recovery-copy" tabIndex={-1} onKeyDown={handleKeyDown}>
+    <span className="conflict-recovery-eyebrow">SAVE CONFLICT</span>
+    <h2 id="conflict-recovery-title">A newer saved version exists</h2>
+    <p id="conflict-recovery-copy">Your local draft is based on revision {localRevision}{currentRevision === undefined ? "" : `, while the project now has revision ${currentRevision}`}. Your draft is still open here and has not been replaced.</p>
+    <p className="conflict-recovery-guidance">There is no automatic merge. Download a backup before discarding your draft, or keep editing and reconcile the versions yourself.</p>
+    {error && <p className="conflict-recovery-error" role="alert">{error}</p>}
+    {notice && <p className="conflict-recovery-notice" role="status">{notice}</p>}
+    <div className="conflict-recovery-actions">
+      <button ref={keepEditingRef} type="button" className="conflict-recovery-secondary" onClick={onKeepEditing}>Keep editing</button>
+      <button type="button" className="conflict-recovery-secondary" onClick={onDownloadDraft}>Download draft backup</button>
+      <button type="button" className="conflict-recovery-danger" onClick={onLoadLatest} disabled={busy}>{busy ? "Loading saved version…" : `Discard draft and load ${currentRevision === undefined ? "latest saved version" : `revision ${currentRevision}`}`}</button>
+    </div>
+  </section></div>;
 }
 
 function CanvasNode({ node, projectId, designSystem, modeId, selected, selection, onSelect, onStartDrag, onResize, flowItem = false }: { node: DesignNode; projectId: string; designSystem: DesignSystem; modeId: string; selected: boolean; selection: string[]; onSelect: (node: DesignNode) => void; onStartDrag: (node: DesignNode, event: React.PointerEvent<HTMLDivElement>) => void; onResize: (node: DesignNode, event: React.PointerEvent<HTMLButtonElement>) => void; flowItem?: boolean }) {

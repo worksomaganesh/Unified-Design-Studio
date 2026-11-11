@@ -25,6 +25,7 @@
 - Keep provider API keys in the local service/OS secure store; never in browser bundles, persistent browser storage, design JSON, screenshots, logs or Git. A key is briefly present in the password field and local-service request body during setup.
 - MCP operations are scoped to the active project and use the same validated command service as UI operations.
 - Phase 9 review threads are scoped to an active local project and validated against saved revisions; their `You` author label is not an authenticated identity.
+- State-changing HTTP API requests require an allow-listed HTTP loopback `Origin`; present Fetch Metadata must be `same-origin`, `same-site`, or `none`. This blocks ordinary off-site browser requests but does not stop local processes from forging headers and does not authenticate a user.
 - Loopback binding is an exposure boundary, not user authentication. Do not expose project review routes to a LAN or remote client until identity, membership, authorization, and request protections are implemented and reviewed.
 - Destructive operations, external network actions and repository writes require explicit confirmation.
 - Minimize research evidence; never capture passwords, cookies, tokens or private project contents.
@@ -33,7 +34,7 @@
 ## Current AI boundary notes
 
 - Provider keys are handled by the local service. On Windows, the service stores keys in Windows Credential Manager; on other platforms it reads provider-specific environment variables. Keys are not returned to the browser after save.
-- Credential write/delete routes accept only HTTP loopback origins used by the local Studio/API and reject cross-site Fetch Metadata.
+- All HTTP state-changing routes use the same loopback-Origin guard, including credential writes. Automated tests cover allowed/rejected origins and all four mutation methods.
 - Provider requests use HTTPS and the selected provider's authentication header. Only explicitly selected project images are loaded for image input. The API validates project ownership and asset paths and caps selection at three images, 4 MB each, and 8 MB total.
 - Planning and generation send the brief and a compact document summary. Selection revision sends a compact document summary plus selected layer summaries. The full document is not sent.
 - AI output is untrusted: Zod validates generated plans, directions, and patch operations; patches are restricted to selected node IDs and compatible node types. Provider calls do not write documents or execute model-generated code.
@@ -48,6 +49,7 @@ If endpoint protection flags an REA installer/package, do not disable protection
 
 ## Release security tests
 
+- Local Origin and Fetch Metadata enforcement on every state-changing HTTP method.
 - Preview origin/CSP and message-bridge tests.
 - Path traversal, symlink and asset-import boundary tests.
 - Malformed document and malicious AI patch tests.

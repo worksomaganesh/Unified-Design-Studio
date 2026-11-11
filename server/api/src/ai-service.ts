@@ -20,6 +20,7 @@ import {
 } from "@uds/ai-engine";
 import { providerAdapters, providerDefaultModel } from "./ai-providers.js";
 import { convertFigmaFileResponse } from "./figma-import.js";
+import { rejectCrossSite } from "./request-origin.js";
 import { deleteProviderCredential, getProviderCredential, hasProviderCredential, storeProviderCredential } from "./secure-credentials.js";
 
 type Database = DatabaseSync;
@@ -42,26 +43,6 @@ const reviseBody = z.object({ document: z.unknown(), prompt: promptText, model: 
 function workspaceSettings(db: Database): Settings {
   const row = db.prepare("SELECT value_json AS value FROM workspace_settings WHERE key = 'workspace'").get() as { value: string } | undefined;
   return row ? JSON.parse(row.value) as Settings : { theme: "system", recentProjectLimit: 12, selectedProvider: "none" };
-}
-
-function isSameStudioRequest(request: FastifyRequest): boolean {
-  const site = request.headers["sec-fetch-site"];
-  if (site && site !== "same-origin" && site !== "none") return false;
-  const origin = request.headers.origin;
-  if (!origin) return false;
-  try {
-    const parsed = new URL(origin);
-    const loopbackHost = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]).has(parsed.hostname.toLowerCase());
-    const studioPort = new Set(["", "4318", "5173", "4173"]).has(parsed.port);
-    return parsed.protocol === "http:" && loopbackHost && studioPort;
-  }
-  catch { return false; }
-}
-
-function rejectCrossSite(request: FastifyRequest, reply: FastifyReply): boolean {
-  if (isSameStudioRequest(request)) return false;
-  void reply.code(403).send({ error: "Credential actions are allowed only from the local studio." });
-  return true;
 }
 
 function extractJson(text: string): unknown {

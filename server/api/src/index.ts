@@ -9,6 +9,7 @@ import { createDefaultDesignSystem, DesignDocumentSchema, migrateDocument, type 
 import { buildCodeExportFiles, collectImageSources, inspectExportSupport } from "@uds/renderer";
 import { registerAIService } from "./ai-service.js";
 import { DocumentCommandError, saveDocumentRevision } from "./document-commands.js";
+import { registerLocalMutationOriginGuard } from "./request-origin.js";
 import { convertPenpotV3Archive } from "./penpot-import.js";
 import { createZip } from "./zip.js";
 
@@ -46,6 +47,7 @@ if (!db.prepare("SELECT 1 FROM app_migrations WHERE version = 4").get()) {
 const app = Fastify({ logger: true, bodyLimit: 1024 * 1024 });
 await app.register(helmet, { contentSecurityPolicy: false });
 await app.register((await import("@fastify/multipart")).default, { limits: { files: 1, fileSize: 20 * 1024 * 1024 } });
+registerLocalMutationOriginGuard(app);
 
 app.get("/api/health", async () => ({ status: "ok" }));
 app.get("/api/projects", async () => db.prepare("SELECT id, name, updated_at AS updatedAt FROM projects WHERE archived_at IS NULL ORDER BY updated_at DESC").all());

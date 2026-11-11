@@ -102,16 +102,24 @@ This backlog translates the product architecture into independently reviewable s
 
 - [x] Add local review threads anchored to a saved document revision, page, and optional layer; support replies, resolve, and reopen.
 - [x] Compare two saved revisions with page, layer, and design-system change summaries; restore an older snapshot as a new immutable revision.
+- [x] Preserve unsaved canvas work on stale-revision conflicts; offer a local JSON backup or an explicit, validated reload of the latest saved revision.
+- [x] Add unit coverage for review migration constraints/cascades and stale-save revision protection.
+- [x] Require allow-listed loopback origins for HTTP state changes; cover POST, PUT, PATCH, DELETE and unaffected reads in integration tests.
 - [ ] Complete desktop review of the migration, comment panel, compare view, and restore flow on existing projects.
 - [ ] Add verified identity, project membership/roles, invitation acceptance, and explicit authorization before enabling project sharing.
-- [ ] Add synchronization and conflict recovery for shared projects without weakening revision preconditions or local-first behavior.
+- [ ] Add synchronization and conflict recovery for shared projects, including offline and merge scenarios, without weakening revision preconditions or local-first behavior.
 - [ ] Add scoped specialist-agent task definitions with bounded inputs/tools, cancellation, progress, and review-required results.
 - [ ] Require explicit user approval and revision-checked commands before an agent result can modify a design document; record accepted changes in normal revision history.
 
-**Phase 9 progress:** 25% complete; 75% remains. The local review foundation is implemented; multi-user identity/sharing and specialist-agent task workflows remain open. Runtime and desktop review for this new slice is still pending. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md).
+**Phase 9 progress:** 35% complete; 65% remains. Local review, revision comparison, stale-save draft recovery, migration/conflict coverage, and HTTP mutation-origin checks are implemented. Browser review, verified identity/sharing, shared synchronization, and specialist-agent task workflows remain open. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md).
 
 ## Phase 10 — Testing, optimization and release
 
-- [ ] Add unit, integration, canvas interaction and visual regression coverage.
-- [ ] Audit security, accessibility, performance, recovery and packaging.
-- [ ] Complete user documentation and release checklist.
+- [x] Add and run unit/integration tests for review recovery and local mutation-origin enforcement (34 configured tests pass).
+- [x] Typecheck all workspace packages and build the Studio for production.
+- [x] Split major editor panels into on-demand chunks; reduce the main bundle and clear the oversized-chunk warning.
+- [ ] Add browser-level canvas interaction and visual regression coverage.
+- [ ] Complete security, accessibility, performance, recovery and packaging audits.
+- [ ] Finish user documentation and satisfy the owner-facing release checklist.
+
+**Phase 10 progress:** 20% complete; 80% remains. Automated checks and an initial loading optimization are verified. Browser interaction/visual review, broader audits, packaging and release gates remain open; see [`PHASE_10_RELEASE_CHECKLIST.md`](PHASE_10_RELEASE_CHECKLIST.md).

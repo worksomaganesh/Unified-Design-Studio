@@ -1,10 +1,11 @@
 # Internal API contracts — v0 baseline
 
-**Status:** Project/document APIs, Phase 5 AI routes, Phase 7 code export routes, provenance-aware asset uploads, DTCG and Figma Variables adapters, Figma REST file import, supported Penpot v3 import, bounded MCP read/write tools, and local Phase 9 review threads/revision comparison are implemented as described below. Live external-file verification remains open.
+**Status:** Project/document APIs, Phase 5 AI routes, Phase 7 code export routes, provenance-aware asset uploads, DTCG and Figma Variables adapters, Figma REST file import, supported Penpot v3 import, bounded MCP read/write tools, local Phase 9 review/revision comparison, and explicit stale-save recovery are implemented as described below. Live external-file verification remains open.
 
 ## 1. Principles
 
 - Internal service commands are the single mutation boundary for UI, AI, and MCP clients.
+- HTTP state-changing routes (`POST`, `PUT`, `PATCH`, `DELETE`) require an exact allow-listed HTTP loopback `Origin`. If `Sec-Fetch-Site` is present, accepted values are `same-origin`, `same-site`, and `none`; all other values are rejected. The check runs at Fastify's `onRequest` stage before request-body and multipart parsing. This is a browser CSRF defense, not user authentication. The MCP stdio transport does not pass through this HTTP guard.
 - Validate all input/output at runtime.
 - Scope every operation to an authorized local project/document.
 - Use revision preconditions for mutations.
@@ -62,6 +63,8 @@ Phase 5 currently accepts `setText`, `setFill`, `setColor`, `setFontSize`, and `
 7. Save through the normal revision-checked document route to persist the edit.
 
 If a persisted or local revision is stale, return a conflict or reject application; do not silently overwrite.
+
+When a document save returns `409` with `currentRevision`, the Studio keeps the unsaved draft in editor state and presents recovery choices. Users may continue editing, download a JSON draft backup, or explicitly discard the local draft and load the latest saved document. The reload is schema-validated and clears undo/redo history based on the stale document. There is no automatic merge; local and saved versions are never silently combined.
 
 ## 5. Implemented AI routes
 
@@ -138,4 +141,4 @@ Both write tools call the schema-validated, revision-checked document save comma
 | `PATCH /api/projects/:id/review/threads/:threadId` | Resolve or reopen a project-scoped thread. |
 | `GET /api/projects/:id/revisions/compare?documentId=…&fromRevision=…&toRevision=…` | Return page/layer change summaries plus design-system/prototype change flags; at most 100 changed layers are listed. Full snapshots are not returned. |
 
-Review threads and comments are separate from design snapshots. The local author label is `You`; it does not establish account identity. All routes require an active project and the service binds to loopback. They are not a multi-user authorization layer and must not be exposed to network clients. Shared projects, identity, roles, synchronization, and specialist-agent tasks remain future work. Revision restore uses the existing restore route and appends a new immutable revision. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md).
+Review threads and comments are separate from design snapshots. The local author label is `You`; it does not establish account identity. All routes require an active project and the service binds to loopback. They are not a multi-user authorization layer and must not be exposed to network clients. Shared projects, identity, roles, synchronization, and specialist-agent tasks remain future work. State-changing HTTP routes are covered by the global local-Origin guard described in section 1. Revision restore uses the existing restore route and appends a new immutable revision. Migration integrity and stale-save protection are covered by `tests/unit/phase-nine-recovery.test.ts`; origin enforcement is covered by `tests/integration/local-origin-guard.test.ts`. The recovery dialog still requires desktop browser review. See [`PHASE_9_COLLABORATION.md`](PHASE_9_COLLABORATION.md).

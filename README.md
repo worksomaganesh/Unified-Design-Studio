@@ -2,7 +2,7 @@
 
 An AI-native, local-first product design workspace combining UX planning, multimodal design generation, direct visual editing, reusable design systems, interactive prototypes and frontend handoff.
 
-> **Current stage:** Phase 9 — Collaboration and AI-agent ecosystem — is 25% complete. Local review threads and saved-revision comparison are implemented; desktop review, verified identity/sharing, and scoped specialist-agent workflows remain. Phase 8 remains at 90%, with live Figma, Penpot, and token-workflow review pending.
+> **Current stage:** Phase 9 — Collaboration and AI-agent ecosystem — is 35% complete. Local review, revision comparison, stale-save recovery, and loopback-origin checks for HTTP mutations are implemented; desktop review, verified identity/sharing, and scoped specialist-agent workflows remain. Phase 10 — Testing, optimization and release — has started and is 20% complete. The configured 34-test suite, workspace typecheck, and production build pass; browser review, broader accessibility/security/performance audits, packaging, and release checks remain. Phase 8 remains at 90%, with live Figma, Penpot, and token-workflow review pending.
 
 ## Project progress
 
@@ -17,8 +17,8 @@ An AI-native, local-first product design workspace combining UX planning, multim
 | 6 — Prototyping and UX | 95% | Implementation is complete; hands-on preview and interaction review remains. |
 | 7 — Code generation and handoff | 95% | React and HTML/CSS export are implemented; downloaded output review remains. |
 | 8 — Interoperability | 90% | DTCG, Penpot v3 subset, Figma REST file/Variables exchange, asset provenance, and bounded MCP tools are implemented. Live Figma, Penpot, and token-workflow review remains. |
-| 9 — Collaboration and AI-agent ecosystem | 25% | Local page/layer comments, thread replies/resolution, and revision comparison are implemented. Desktop review, project identity/sharing, synchronization, and specialist-agent task/review flows remain. See [Phase 9 collaboration](docs/PHASE_9_COLLABORATION.md). |
-| 10 — Testing, optimization and release | Not started | — |
+| 9 — Collaboration and AI-agent ecosystem | 35% | Local review, revision comparison, stale-save recovery, and loopback-origin checks for HTTP mutations are implemented. Desktop review, identity/sharing, synchronization, and specialist-agent task/review flows remain. See [Phase 9 collaboration](docs/PHASE_9_COLLABORATION.md). |
+| 10 — Testing, optimization and release | 20% | 34 automated tests, workspace typecheck, production build, initial mutation-origin security coverage, and on-demand workspace-panel loading are verified. Browser/accessibility review, broader audits, packaging, and release gates remain. See the [Phase 10 release checklist](docs/PHASE_10_RELEASE_CHECKLIST.md). |
 
 See the [development backlog](docs/DEVELOPMENT_BACKLOG.md) and [roadmap](docs/DEVELOPMENT_ROADMAP.md) for detailed gates and limitations.
 
@@ -30,7 +30,8 @@ See the [development backlog](docs/DEVELOPMENT_BACKLOG.md) and [roadmap](docs/DE
 - Prototype Studio supports validated interactions, variables, text bindings, component variants, sandboxed preview and local UX/accessibility checks. See [prototyping](docs/PROTOTYPING.md).
 - Code handoff exports React, static HTML/CSS, tokens, images and a support report in a ZIP, with a script-free restricted preview. See [Code handoff](docs/CODE_HANDOFF.md).
 - Phase 8 exchanges DTCG/Penpot/Tokens Studio tokens, imports supported Penpot v3 and Figma REST file content, and reads or creates Figma Variables. Figma `.fig` uploads remain reference-only. MCP provides bounded project/layer reads and revision-checked text/rename commands. See the [interoperability guide](docs/INTEROPERABILITY.md).
-- Phase 9 adds local review threads anchored to saved pages/layers, reply and resolution controls, and revision comparison while preserving immutable design history. Multi-user sharing and agent orchestration are not yet enabled; see [Phase 9 collaboration](docs/PHASE_9_COLLABORATION.md).
+- Phase 9 adds local review threads anchored to saved pages/layers, reply and resolution controls, revision comparison, an explicit stale-save recovery path, and loopback-origin checks on HTTP mutations. Multi-user sharing and agent orchestration are not enabled; see [Phase 9 collaboration](docs/PHASE_9_COLLABORATION.md).
+- Phase 10 adds automated coverage for review recovery and HTTP mutation origins, plus on-demand loading for major editor panels. The configured tests, typecheck, and production build pass; see the [Phase 10 release checklist](docs/PHASE_10_RELEASE_CHECKLIST.md) for remaining checks.
 - Product discovery adds a first-run welcome, searchable guide to 58 verified capabilities, eight short category tours, contextual tips, saved onboarding progress, and a structured What's New panel. See the [feature inventory](docs/PRODUCT_FEATURE_INVENTORY.md), [onboarding architecture](docs/ONBOARDING_ARCHITECTURE.md), [tour guide](docs/PRODUCT_TOUR_GUIDE.md), and [What's New system](docs/WHATS_NEW_SYSTEM.md).
 - Workspace typecheck and Studio production build pass. Phase 3 desktop review and Phase 5–8 live checks remain as listed above.
 
